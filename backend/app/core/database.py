@@ -159,8 +159,7 @@ def ensure_schema_migrations():
         pass
 
 
-# Run initial setup
-init_db()
+# Note: init_db() is called by the application entrypoint (main.py) to prevent redundant double initialization during imports/tests.
 
 
 

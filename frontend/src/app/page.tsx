@@ -69,11 +69,12 @@ export default function HomePage() {
     }
     setIsLoggedIn(true);
 
-    const savedCampus = typeof window !== "undefined" ? localStorage.getItem("preferred_campus") || "" : "";
+    const savedCampus = typeof window !== "undefined" ? localStorage.getItem("px_campus") || localStorage.getItem("preferred_campus") || "" : "";
     setSelectedCampus(savedCampus);
 
-    const handleCampusChange = () => {
-      setSelectedCampus(localStorage.getItem("preferred_campus") || "");
+    const handleCampusChange = (e: any) => {
+      const newCampus = e?.detail !== undefined ? e.detail : (localStorage.getItem("px_campus") || localStorage.getItem("preferred_campus") || "");
+      setSelectedCampus(newCampus);
     };
     window.addEventListener("campusChanged", handleCampusChange);
 

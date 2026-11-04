@@ -170,7 +170,8 @@ def list_products(
     if transaction_type:
         query = query.filter(Product.transaction_type == transaction_type)
     if condition:
-        query = query.filter(Product.condition.ilike(f"%{condition}%"))
+        safe_condition = _escape_like_pattern(condition.strip())
+        query = query.filter(Product.condition.ilike(f"%{safe_condition}%"))
     if min_price is not None:
         query = query.filter(Product.price >= min_price)
     if max_price is not None:
@@ -237,7 +238,8 @@ def nearby_products(
     if transaction_type:
         query = query.filter(Product.transaction_type == transaction_type)
     if condition:
-        query = query.filter(Product.condition.ilike(f"%{condition}%"))
+        safe_condition = _escape_like_pattern(condition.strip())
+        query = query.filter(Product.condition.ilike(f"%{safe_condition}%"))
     if min_price is not None:
         query = query.filter(Product.price >= min_price)
     if max_price is not None:

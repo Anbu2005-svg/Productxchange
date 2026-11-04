@@ -276,7 +276,7 @@ def request_otp(
         )
 
     # Check if this phone is already bound to a different user
-    existing_user = db.query(User).filter(User.phone == phone, User.id != user.id).first()
+    existing_user = db.query(User).filter(User.phone == clean_phone, User.id != user.id).first()
     if existing_user:
         raise HTTPException(
             status_code=400,
