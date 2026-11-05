@@ -93,6 +93,29 @@ def get_unread_count(user: User = Depends(get_current_user), db: Session = Depen
     return {"unread_count": unread}
 
 
+@router.get("/conversations/{conversation_id}")
+def get_conversation_details(
+    conversation_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    convo = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not convo or user.id not in (convo.user_a_id, convo.user_b_id):
+        raise HTTPException(status_code=403, detail="Not part of this conversation")
+    
+    other_id = convo.user_b_id if user.id == convo.user_a_id else convo.user_a_id
+    other_user = db.query(User).filter(User.id == other_id).first()
+    return {
+        "id": convo.id,
+        "product_id": convo.product_id,
+        "user_a_id": convo.user_a_id,
+        "user_b_id": convo.user_b_id,
+        "other_user_name": other_user.full_name if other_user else None,
+        "other_user_avatar": other_user.avatar_url if other_user else None,
+        "other_user_college": other_user.college if other_user else None,
+    }
+
+
 @router.get(
     "/conversations/{conversation_id}/messages",
     dependencies=[Depends(rate_limit_dependency(max_requests=60, window_seconds=60))],

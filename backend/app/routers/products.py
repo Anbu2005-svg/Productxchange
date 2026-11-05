@@ -269,6 +269,20 @@ def nearby_products(
     return results
 
 
+@router.get("/categories")
+def list_categories():
+    """List standard product categories used across the platform."""
+    return [
+        "Textbooks & Study Material",
+        "Electronics & Gadgets",
+        "Lab Equipment & Calculators",
+        "Cycles & Mobility",
+        "Hostel & Room Essentials",
+        "Sports & Fitness",
+        "Other",
+    ]
+
+
 @router.get("/campuses")
 def list_campuses(db: Session = Depends(get_db)):
     """List campuses with active listings count for multi-campus discovery."""
@@ -448,6 +462,23 @@ def delete_product(product_id: int, user: User = Depends(get_current_user), db: 
     if product.seller_id != user.id:
         raise HTTPException(status_code=403, detail="Not your listing")
     product.status = ProductStatus.REMOVED
+
+    # Clean up local storage image files associated with this listing
+    if settings.STORAGE_BACKEND == "local" and product.image_urls:
+        try:
+            urls = product.image_urls if isinstance(product.image_urls, list) else json.loads(product.image_urls)
+            for u in urls:
+                if isinstance(u, str) and u.startswith("/uploads/"):
+                    fname = os.path.basename(u)
+                    fpath = os.path.join(settings.LOCAL_STORAGE_DIR, fname)
+                    if os.path.isfile(fpath):
+                        try:
+                            os.remove(fpath)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
     db.commit()
     return {"message": "Listing removed"}
 

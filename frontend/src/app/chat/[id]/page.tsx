@@ -19,6 +19,9 @@ type ConversationInfo = {
   product_id: number | null;
   user_a_id: number;
   user_b_id: number;
+  other_user_name?: string | null;
+  other_user_avatar?: string | null;
+  other_user_college?: string | null;
 };
 
 export default function ChatThreadPage() {
@@ -55,9 +58,8 @@ export default function ChatThreadPage() {
         const user = await api("/auth/me");
         setCurrentUser(user);
 
-        // Get conversation info
-        const convos = await api("/chat/conversations");
-        const thisConvo = convos.find((c: ConversationInfo) => c.id === Number(conversationId));
+        // Get conversation info with user details
+        const thisConvo = await api(`/chat/conversations/${conversationId}`).catch(() => null);
         setConvo(thisConvo || null);
 
         await fetchMessages();
@@ -205,20 +207,25 @@ export default function ChatThreadPage() {
           </svg>
         </Link>
         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-moss/15 to-emerald-100 dark:from-emerald-950 dark:to-stone-800 flex items-center justify-center text-sm font-bold text-moss dark:text-emerald-300 border border-moss/10 dark:border-stone-700 shrink-0">
-          U
+          {convo?.other_user_name ? convo.other_user_name.charAt(0).toUpperCase() : "U"}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-ink dark:text-white truncate">
             {otherUserId ? (
               <Link href={`/profile/${otherUserId}`} className="hover:text-moss dark:hover:text-emerald-400 transition-colors">
-                User #{otherUserId}
+                {convo?.other_user_name || `User #${otherUserId}`}
               </Link>
             ) : (
               "Chat"
             )}
           </p>
+          {convo?.other_user_college && (
+            <p className="text-[11px] text-ink/50 dark:text-stone-400 truncate">
+              {convo.other_user_college}
+            </p>
+          )}
           {convo?.product_id && (
-            <Link href={`/listings/${convo.product_id}`} className="text-[11px] text-moss dark:text-emerald-400 hover:underline">
+            <Link href={`/listings/${convo.product_id}`} className="text-[11px] text-moss dark:text-emerald-400 hover:underline block">
               View listing →
             </Link>
           )}
