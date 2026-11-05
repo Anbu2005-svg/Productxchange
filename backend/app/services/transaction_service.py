@@ -119,6 +119,13 @@ class TransactionService:
         self._assert_transition(tx.state, TransactionState.REJECTED)
         self._assert_can_respond_to_offer(tx, actor_id)
         tx.state = TransactionState.REJECTED
+        notify_id = tx.buyer_id if actor_id == tx.seller_id else tx.seller_id
+        create_notification(
+            self.db, notify_id, "OFFER_REJECTED",
+            "Offer Declined",
+            "The other party has declined your transaction offer.",
+            "/deals"
+        )
         self.db.commit()
         self.db.refresh(tx)
         return tx
@@ -129,6 +136,13 @@ class TransactionService:
         tx.state = TransactionState.COUNTERED
         tx.agreed_price = amount
         self.db.add(Offer(transaction_id=tx.id, proposed_by_id=actor_id, amount=amount, message=message))
+        notify_id = tx.buyer_id if actor_id == tx.seller_id else tx.seller_id
+        create_notification(
+            self.db, notify_id, "COUNTER_OFFER",
+            "New Counter-Offer",
+            f"A counter-offer of ₹{amount} has been proposed.",
+            "/deals"
+        )
         self.db.commit()
         self.db.refresh(tx)
         return tx

@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, uploadProductImage, uploadProductImageWithAngle, convertProductTo3D, suggestListingAI } from "@/lib/api";
+import { api, uploadProductImage, uploadProductImageWithAngle, convertProductTo3D, suggestListingAI, compressImage } from "@/lib/api";
 import MultiAnglePhotoStudio, { AngleData, AnglePreviews } from "@/components/MultiAnglePhotoStudio";
 import { useToast } from "@/components/Toast";
 
@@ -147,7 +147,8 @@ export default function NewListingPage() {
       if (angleEntries.length > 0) {
         for (const [angle, file] of angleEntries) {
           try {
-            await uploadProductImageWithAngle(product.id, file, angle);
+            const compressed = await compressImage(file);
+            await uploadProductImageWithAngle(product.id, compressed, angle);
           } catch {}
         }
         if (is3DReady) {
@@ -161,7 +162,8 @@ export default function NewListingPage() {
       if (selectedFiles.length > 0) {
         for (const file of selectedFiles) {
           try {
-            await uploadProductImage(product.id, file);
+            const compressed = await compressImage(file);
+            await uploadProductImage(product.id, compressed);
           } catch {}
         }
       }

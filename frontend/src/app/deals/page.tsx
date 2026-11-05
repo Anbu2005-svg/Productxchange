@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { api, Transaction, resolveImageUrl, User } from "@/lib/api";
+import { api, Transaction, resolveImageUrl, User, getToken, API_BASE } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { DealCardSkeleton } from "@/components/Skeleton";
 
@@ -88,6 +88,50 @@ export default function DealsPage() {
 
   useEffect(() => {
     loadData();
+
+    // Live WebSocket connection for instant deal updates (offers, acceptances, confirmations)
+    const token = getToken();
+    if (!token) return;
+
+    let ws: WebSocket | null = null;
+    let reconnectTimer: any = null;
+
+    function connectWs() {
+      try {
+        const apiBase = API_BASE;
+        const wsProto = apiBase.startsWith("https") ? "wss" : "ws";
+        const wsHost = apiBase.replace(/^https?:\/\//, "");
+        const wsUrl = `${wsProto}://${wsHost}/notifications/ws?token=${encodeURIComponent(token!)}`;
+
+        ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.deal_update || (data.link && data.link.includes("/deals"))) {
+              // Silently refresh deals when state updates arrive
+              api("/transactions/mine")
+                .then((txList) => setTransactions(txList))
+                .catch(() => {});
+            }
+          } catch {}
+        };
+
+        ws.onclose = () => {
+          reconnectTimer = setTimeout(connectWs, 5000);
+        };
+      } catch {}
+    }
+
+    connectWs();
+
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+    };
   }, []);
 
   async function handleAction(txId: number, action: string, extra: Record<string, any> = {}) {

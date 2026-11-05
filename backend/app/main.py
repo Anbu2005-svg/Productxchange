@@ -26,6 +26,15 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(self), camera=(), microphone=()"
+    # Dynamic connect-src including configured CORS origins and their WebSocket equivalents
+    allowed_connect = ["'self'", "http://localhost:8000", "http://127.0.0.1:8000", "ws://localhost:8000", "ws://127.0.0.1:8000"]
+    for origin in settings.CORS_ORIGINS:
+        if origin not in allowed_connect:
+            allowed_connect.append(origin)
+        ws_origin = origin.replace("https://", "wss://").replace("http://", "ws://")
+        if ws_origin not in allowed_connect:
+            allowed_connect.append(ws_origin)
+
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "img-src 'self' data: https: blob:; "
@@ -35,7 +44,7 @@ async def add_security_headers(request: Request, call_next):
         "object-src 'none'; "
         "base-uri 'self'; "
         "form-action 'self'; "
-        "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 ws://localhost:8000 ws://127.0.0.1:8000; "
+        f"connect-src {' '.join(allowed_connect)}; "
         "frame-ancestors 'none';"
     )
     if settings.ENV == "production":

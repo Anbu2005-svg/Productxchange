@@ -60,7 +60,7 @@ _push_subscriptions: Dict[int, list] = {}
 
 
 def create_notification(db: Session, user_id: int, type: str, title: str, message: str = None, link: str = None):
-    """Helper to create a notification from anywhere in the app."""
+    """Helper to create a notification from anywhere in the app and broadcast via live WebSocket."""
     notif = Notification(
         user_id=user_id,
         type=type,
@@ -70,6 +70,21 @@ def create_notification(db: Session, user_id: int, type: str, title: str, messag
     )
     db.add(notif)
     # Don't commit here — let the caller commit as part of their transaction
+
+    # Real-time WebSocket dispatch
+    import anyio
+    try:
+        from app.core.websocket import manager
+        payload = {
+            "type": type,
+            "title": title,
+            "message": message,
+            "link": link or "/deals",
+            "deal_update": True,
+        }
+        anyio.from_thread.run(manager.send_user_notification, user_id, payload)
+    except Exception:
+        pass
 
 
 @router.get("")

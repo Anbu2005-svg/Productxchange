@@ -329,3 +329,72 @@ export async function reportListing(productId: number, reason: string, details?:
 export async function getUnreadChatCount(): Promise<{ unread_count: number }> {
   return api("/chat/unread-count");
 }
+
+/**
+ * Client-side image compression using HTML5 Canvas.
+ * Automatically downsizes images larger than maxWidth/maxHeight and encodes as JPEG with quality factor.
+ * Non-image files or failed compressions return the original file as fallback.
+ */
+export async function compressImage(
+  file: File,
+  maxWidth = 1600,
+  maxHeight = 1600,
+  quality = 0.82
+): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/svg+xml" || file.type === "image/gif") {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            maxHeight;
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob || blob.size >= file.size) {
+              resolve(file); // Keep original if compression didn't reduce size
+              return;
+            }
+            const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
