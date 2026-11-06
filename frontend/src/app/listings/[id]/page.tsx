@@ -249,7 +249,7 @@ export default function ListingDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-4 sm:p-6 shadow-sm transition-colors">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 bg-white/95 dark:bg-[#1a211d]/95 backdrop-blur-xl border border-ink/8 dark:border-white/10 rounded-3xl p-5 sm:p-7 shadow-xs transition-colors">
         {/* Photo Gallery Column */}
         <div className="flex flex-col gap-3">
           {/* 2D / 3D Mode Switcher (Display all products in 3D) */}

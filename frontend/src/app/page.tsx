@@ -19,6 +19,14 @@ const CampusMap = dynamic(() => import("@/components/CampusMap"), {
 
 const TRANSACTION_TYPES = ["ALL", "BUY", "RENT", "EXCHANGE", "DONATE"];
 
+const TYPE_CHIPS = [
+  { key: "ALL", label: "All Items", icon: "✨" },
+  { key: "BUY", label: "Buy", icon: "🛒" },
+  { key: "EXCHANGE", label: "Swap", icon: "🔄" },
+  { key: "RENT", label: "Rent", icon: "⏱️" },
+  { key: "DONATE", label: "Free Gifts", icon: "🎁" },
+];
+
 const CATEGORIES = [
   "ALL",
   "Textbooks & Study Material",
@@ -28,6 +36,17 @@ const CATEGORIES = [
   "Hostel & Room Essentials",
   "Sports & Fitness",
   "Other",
+];
+
+const CATEGORY_CHIPS = [
+  { key: "ALL", name: "All", icon: "✨" },
+  { key: "Textbooks & Study Material", name: "Textbooks & Notes", icon: "📚" },
+  { key: "Electronics & Gadgets", name: "Tech & Gadgets", icon: "💻" },
+  { key: "Lab Equipment & Calculators", name: "Lab Gear", icon: "🔬" },
+  { key: "Cycles & Mobility", name: "Cycles", icon: "🚲" },
+  { key: "Hostel & Room Essentials", name: "Hostel & Dorm", icon: "🛋️" },
+  { key: "Sports & Fitness", name: "Sports", icon: "🏸" },
+  { key: "Other", name: "Other", icon: "🎒" },
 ];
 
 const CONDITIONS = ["ALL", "Brand New", "Like New", "Good", "Fair"];
@@ -303,8 +322,57 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Hero / Search Bar */}
-      <div className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-4 sm:p-5 mb-5 sm:mb-6 shadow-sm transition-colors">
+      {/* Campus Hero Banner */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-900/90 via-[#1c2b24] to-[#122019] text-white p-6 sm:p-8 mb-5 shadow-lg border border-emerald-500/20">
+        <div className="absolute -top-24 -right-24 w-72 h-72 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-teal-500/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 max-w-2xl">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold uppercase tracking-wider mb-3">
+            <span>🌱</span> Campus Peer-to-Peer Economy
+          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight leading-tight">
+            Exchange & Discover Essentials Right On <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Your Campus</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-sand/80 mt-2 leading-relaxed max-w-xl">
+            Save money and reduce campus waste. Swap textbooks, lab drafters, electronics, cycles, and hostel gear with verified peers at your college.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3 sm:gap-6 mt-4 pt-4 border-t border-white/10 text-[11px] sm:text-xs text-sand/80 font-medium">
+            <div className="flex items-center gap-1.5">
+              <span className="text-emerald-400">✓</span> In-Person Campus Handshakes
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-emerald-400">✓</span> Zero Platform Fees
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-emerald-400">✓</span> 360° Interactive 3D Previews
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Category Quick-Select Carousel Ribbon */}
+      <div className="mb-4 flex items-center gap-2 overflow-x-auto scrollbar-none touch-pan-x pb-1 -mx-1 px-1">
+        {CATEGORY_CHIPS.map((cat) => (
+          <button
+            key={cat.key}
+            type="button"
+            onClick={() => setSelectedCategory(cat.key)}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 border ${
+              selectedCategory === cat.key
+                ? "bg-moss text-white border-moss shadow-sm scale-102"
+                : "bg-white/80 dark:bg-stone-900/80 text-ink/70 dark:text-stone-300 border-ink/10 dark:border-white/10 hover:border-moss/40 hover:bg-white dark:hover:bg-stone-800"
+            }`}
+          >
+            <span>{cat.icon}</span>
+            <span>{cat.name}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Hero Search & Filter Bar */}
+      <div className="bg-white/95 dark:bg-[#1a211d]/95 backdrop-blur-xl border border-ink/8 dark:border-white/10 rounded-2xl p-4 sm:p-5 mb-5 sm:mb-6 shadow-sm transition-colors">
         <div className="flex flex-col md:flex-row gap-3 items-stretch">
           <div className="relative flex-1">
             <span className="absolute left-3.5 top-3 text-ink/40 dark:text-stone-400 text-sm">🔍</span>
@@ -313,23 +381,34 @@ export default function HomePage() {
               placeholder="Search books, lab coats, calculators, cycles, hostel items..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full border border-ink/20 dark:border-stone-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
+              className="w-full border border-ink/15 dark:border-stone-700 rounded-xl pl-9 pr-8 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800/80 focus:outline-none focus:border-moss transition-colors"
             />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-3 top-2.5 text-xs text-ink/40 dark:text-stone-400 hover:text-ink dark:hover:text-white p-1"
+                title="Clear search"
+              >
+                ✕
+              </button>
+            )}
           </div>
 
           {/* Transaction Type Filter Pills & 3D Toggle */}
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none touch-pan-x pb-1 md:pb-0 -mx-1 px-1">
-            {TRANSACTION_TYPES.map((type) => (
+            {TYPE_CHIPS.map((type) => (
               <button
-                key={type}
-                onClick={() => setSelectedType(type)}
-                className={`text-xs font-semibold px-3 py-2 rounded-xl transition-all shrink-0 ${
-                  selectedType === type
+                key={type.key}
+                onClick={() => setSelectedType(type.key)}
+                className={`text-xs font-semibold px-3 py-2 rounded-xl transition-all shrink-0 flex items-center gap-1.5 ${
+                  selectedType === type.key
                     ? "bg-moss text-white shadow-sm"
                     : "bg-sand/60 dark:bg-stone-800 text-ink/70 dark:text-stone-300 hover:bg-sand dark:hover:bg-stone-700"
                 }`}
               >
-                {type === "ALL" ? "All Items" : type}
+                {type.icon && <span>{type.icon}</span>}
+                <span>{type.label}</span>
               </button>
             ))}
 

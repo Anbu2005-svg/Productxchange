@@ -300,11 +300,54 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
-/* ── Glass Effect ──────────────────────────────────── */
+/* ── Glass Effect & Modern Cards ──────────────────────────────────── */
 .glass {
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(28, 43, 36, 0.08);
+}
+
+.dark .glass-panel {
+  background: rgba(24, 28, 25, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.card-lift {
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.28s ease;
+}
+
+.card-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 32px -8px rgba(28, 43, 36, 0.12);
+}
+
+.dark .card-lift:hover {
+  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.45);
+}
+
+.btn-press {
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+.hero-glow {
+  background: radial-gradient(circle at 50% 0%, rgba(47, 107, 79, 0.14) 0%, transparent 70%);
+}
+
+.dark .hero-glow {
+  background: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.12) 0%, transparent 70%);
 }
 
 /* ── Print Styles ──────────────────────────────────── */

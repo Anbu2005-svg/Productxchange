@@ -84,9 +84,9 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-[75vh] flex items-center justify-center -mt-6">
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 bg-white rounded-2xl shadow-lg overflow-hidden border border-ink/10 animate-scale-in">
+      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 bg-white/95 dark:bg-[#1a211d]/95 backdrop-blur-xl rounded-3xl shadow-xl overflow-hidden border border-ink/8 dark:border-white/10 animate-scale-in transition-colors">
         {/* Left: Branding Panel */}
-        <div className="hidden md:flex flex-col justify-between p-8 bg-gradient-to-br from-moss via-moss-dark to-emerald-900 text-white relative overflow-hidden">
+        <div className="hidden md:flex flex-col justify-between p-8 bg-gradient-to-br from-emerald-900 via-[#1c2b24] to-[#122019] text-white relative overflow-hidden">
           <div className="absolute -top-12 -right-12 w-40 h-40 bg-white/5 rounded-full" />
           <div className="absolute -bottom-16 -left-8 w-52 h-52 bg-white/5 rounded-full" />
           <div className="absolute top-1/2 right-0 w-32 h-32 bg-white/[0.03] rounded-full" />
@@ -95,7 +95,7 @@ export default function RegisterPage() {
             <div className="flex items-center gap-2 mb-8">
               <span className="text-3xl">🔄</span>
               <span className="font-extrabold text-2xl tracking-tight">
-                Product<span className="text-emerald-300">Xchange</span>
+                Product<span className="text-emerald-400">Xchange</span>
               </span>
             </div>
 
@@ -161,17 +161,17 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-3.5">
             {/* Full Name */}
             <div>
-              <label htmlFor="reg-name" className="block text-xs font-semibold text-ink/70 mb-1.5">
+              <label htmlFor="reg-name" className="block text-xs font-semibold text-ink/70 dark:text-stone-300 mb-1.5">
                 Full Name *
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-3 text-sm text-ink/35">👤</span>
+                <span className="absolute left-3.5 top-3 text-sm text-ink/35 dark:text-stone-500">👤</span>
                 <input
                   id="reg-name"
-                  className={`w-full border rounded-xl pl-10 pr-4 py-2.5 text-sm text-ink focus:outline-none transition-colors ${
+                  className={`w-full border rounded-xl pl-10 pr-4 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800/80 focus:outline-none transition-colors ${
                     form.full_name && !isNameValid
-                      ? "border-red-300 focus:border-red-400"
-                      : "border-ink/15 focus:border-moss"
+                      ? "border-red-300 dark:border-red-500 focus:border-red-400"
+                      : "border-ink/15 dark:border-stone-700 focus:border-moss"
                   }`}
                   placeholder="Your full name"
                   value={form.full_name}
@@ -185,17 +185,17 @@ export default function RegisterPage() {
 
             {/* Email */}
             <div>
-              <label htmlFor="reg-email" className="block text-xs font-semibold text-ink/70 mb-1.5">
+              <label htmlFor="reg-email" className="block text-xs font-semibold text-ink/70 dark:text-stone-300 mb-1.5">
                 Email Address *
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-3 text-sm text-ink/35">📧</span>
+                <span className="absolute left-3.5 top-3 text-sm text-ink/35 dark:text-stone-500">📧</span>
                 <input
                   id="reg-email"
-                  className={`w-full border rounded-xl pl-10 pr-4 py-2.5 text-sm text-ink focus:outline-none transition-colors ${
+                  className={`w-full border rounded-xl pl-10 pr-4 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800/80 focus:outline-none transition-colors ${
                     form.email && !isEmailValid
-                      ? "border-red-300 focus:border-red-400"
-                      : "border-ink/15 focus:border-moss"
+                      ? "border-red-300 dark:border-red-500 focus:border-red-400"
+                      : "border-ink/15 dark:border-stone-700 focus:border-moss"
                   }`}
                   placeholder="you@college.edu"
                   type="email"
@@ -211,14 +211,14 @@ export default function RegisterPage() {
 
             {/* Password */}
             <div>
-              <label htmlFor="reg-password" className="block text-xs font-semibold text-ink/70 mb-1.5">
+              <label htmlFor="reg-password" className="block text-xs font-semibold text-ink/70 dark:text-stone-300 mb-1.5">
                 Password *
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-3 text-sm text-ink/35">🔒</span>
+                <span className="absolute left-3.5 top-3 text-sm text-ink/35 dark:text-stone-500">🔒</span>
                 <input
                   id="reg-password"
-                  className="w-full border border-ink/15 rounded-xl pl-10 pr-11 py-2.5 text-sm text-ink focus:outline-none focus:border-moss transition-colors"
+                  className="w-full border border-ink/15 dark:border-stone-700 rounded-xl pl-10 pr-11 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800/80 focus:outline-none focus:border-moss transition-colors"
                   placeholder="Minimum 6 characters"
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
@@ -228,7 +228,7 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-2.5 text-sm text-ink/40 hover:text-ink/70 transition-colors"
+                  className="absolute right-3.5 top-2.5 text-sm text-ink/40 dark:text-stone-400 hover:text-ink/70 transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword ? "🙈" : "👁️"}
@@ -236,30 +236,30 @@ export default function RegisterPage() {
               </div>
               {form.password.length > 0 && (
                 <div className="mt-2 flex items-center gap-2">
-                  <div className="flex-1 h-1.5 bg-ink/10 rounded-full overflow-hidden">
+                  <div className="flex-1 h-1.5 bg-ink/10 dark:bg-stone-700 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${strength.color}`}
                       style={{ width: strength.width }}
                     />
                   </div>
-                  <span className="text-[11px] font-medium text-ink/50">{strength.label}</span>
+                  <span className="text-[11px] font-medium text-ink/50 dark:text-stone-400">{strength.label}</span>
                 </div>
               )}
             </div>
 
             {/* Confirm Password */}
             <div>
-              <label htmlFor="reg-confirm" className="block text-xs font-semibold text-ink/70 mb-1.5">
+              <label htmlFor="reg-confirm" className="block text-xs font-semibold text-ink/70 dark:text-stone-300 mb-1.5">
                 Confirm Password *
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-3 text-sm text-ink/35">🔒</span>
+                <span className="absolute left-3.5 top-3 text-sm text-ink/35 dark:text-stone-500">🔒</span>
                 <input
                   id="reg-confirm"
-                  className={`w-full border rounded-xl pl-10 pr-4 py-2.5 text-sm text-ink focus:outline-none transition-colors ${
+                  className={`w-full border rounded-xl pl-10 pr-4 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800/80 focus:outline-none transition-colors ${
                     form.confirmPassword && !doPasswordsMatch
-                      ? "border-red-300 focus:border-red-400"
-                      : "border-ink/15 focus:border-moss"
+                      ? "border-red-300 dark:border-red-500 focus:border-red-400"
+                      : "border-ink/15 dark:border-stone-700 focus:border-moss"
                   }`}
                   placeholder="Re-enter your password"
                   type={showPassword ? "text" : "password"}
@@ -275,14 +275,14 @@ export default function RegisterPage() {
 
             {/* College */}
             <div>
-              <label htmlFor="reg-college" className="block text-xs font-semibold text-ink/70 mb-1.5">
-                College <span className="text-ink/40 font-normal">(optional)</span>
+              <label htmlFor="reg-college" className="block text-xs font-semibold text-ink/70 dark:text-stone-300 mb-1.5">
+                College <span className="text-ink/40 dark:text-stone-400 font-normal">(optional)</span>
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-3 text-sm text-ink/35">🎓</span>
+                <span className="absolute left-3.5 top-3 text-sm text-ink/35 dark:text-stone-500">🎓</span>
                 <input
                   id="reg-college"
-                  className="w-full border border-ink/15 rounded-xl pl-10 pr-4 py-2.5 text-sm text-ink focus:outline-none focus:border-moss transition-colors"
+                  className="w-full border border-ink/15 dark:border-stone-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800/80 focus:outline-none focus:border-moss transition-colors"
                   placeholder="e.g. IIT Madras, VIT, SRM"
                   value={form.college}
                   onChange={(e) => setForm({ ...form, college: e.target.value })}
@@ -292,7 +292,7 @@ export default function RegisterPage() {
 
             {/* Error */}
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 border-l-4 border-l-red-500 rounded-lg text-xs text-red-700 font-medium animate-fade-in">
+              <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 border-l-4 border-l-red-500 rounded-lg text-xs text-red-700 dark:text-red-300 font-medium animate-fade-in">
                 {error}
               </div>
             )}
@@ -300,7 +300,7 @@ export default function RegisterPage() {
             {/* Submit */}
             <button
               disabled={!isFormValid || submitting}
-              className="w-full bg-moss text-white font-semibold py-3 px-4 rounded-xl shadow-sm hover:bg-moss/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm flex items-center justify-center gap-2"
+              className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm flex items-center justify-center gap-2 active:scale-98"
             >
               {submitting ? (
                 <>
@@ -316,10 +316,10 @@ export default function RegisterPage() {
             </button>
           </form>
 
-          <div className="mt-5 pt-5 border-t border-ink/10 text-center">
-            <p className="text-sm text-ink/60">
+          <div className="mt-5 pt-5 border-t border-ink/10 dark:border-stone-800 text-center">
+            <p className="text-sm text-ink/60 dark:text-stone-400">
               Already have an account?{" "}
-              <Link href="/login" className="text-moss font-semibold hover:underline">
+              <Link href="/login" className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline">
                 Sign in
               </Link>
             </p>

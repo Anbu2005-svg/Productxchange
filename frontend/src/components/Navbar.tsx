@@ -104,12 +104,19 @@ export default function Navbar() {
   ];
 
   return (
-    <header className="border-b border-ink/10 dark:border-white/10 bg-white/80 dark:bg-stone-900/80 backdrop-blur-md sticky top-0 z-50 transition-colors">
+    <header className="border-b border-ink/8 dark:border-white/10 bg-white/85 dark:bg-[#131a16]/85 backdrop-blur-xl sticky top-0 z-50 transition-colors shadow-xs">
       <nav className="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-6">
-          <Link href="/" className="font-extrabold text-xl tracking-tight text-moss flex items-center gap-1.5">
-            <span className="text-2xl">🔄</span>
-            <span>Product<span className="text-ink dark:text-sand">Xchange</span></span>
+          <Link href="/" className="font-extrabold text-xl tracking-tight flex items-center gap-2 group">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 flex items-center justify-center text-white text-base shadow-sm group-hover:scale-105 transition-transform">
+              🔄
+            </div>
+            <span className="text-emerald-700 dark:text-emerald-400 font-black">
+              Product<span className="text-ink dark:text-sand font-bold">Xchange</span>
+            </span>
+            <span className="hidden lg:inline-block text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 uppercase tracking-widest">
+              Campus
+            </span>
           </Link>
 
           {/* Desktop Nav Links */}
@@ -118,13 +125,13 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 relative ${
+                className={`text-sm font-semibold px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 relative ${
                   pathname === link.href
-                    ? "text-moss bg-moss/5 dark:bg-moss/20"
-                    : "text-ink/60 dark:text-stone-300 hover:text-moss hover:bg-moss/5 dark:hover:bg-moss/10"
+                    ? "text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-500/20"
+                    : "text-ink/65 dark:text-stone-300 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/5 dark:hover:bg-emerald-500/10"
                 }`}
               >
-                <span className="text-[13px]">{link.icon}</span>
+                <span className="text-sm">{link.icon}</span>
                 {link.label}
                 {Boolean(link.badge && link.badge > 0) && (
                   <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
@@ -138,7 +145,7 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => setCampusDropdownOpen(!campusDropdownOpen)}
-                className="hidden md:flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-ink/10 dark:border-white/10 bg-sand/60 dark:bg-stone-800 text-ink/80 dark:text-stone-200 hover:border-moss transition-all"
+                className="hidden md:flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-ink/10 dark:border-white/10 bg-sand/60 dark:bg-stone-800 text-ink/80 dark:text-stone-200 hover:border-emerald-500/40 transition-all shadow-2xs"
                 title="Filter by college campus"
               >
                 <span>🏫</span>
@@ -149,15 +156,15 @@ export default function Navbar() {
               </button>
 
               {campusDropdownOpen && (
-                <div className="absolute top-full mt-1.5 left-0 w-64 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-xl shadow-xl py-1 z-50 text-xs">
+                <div className="absolute top-full mt-1.5 left-0 w-64 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl shadow-xl py-1 z-50 text-xs">
                   <div className="px-3 py-1.5 border-b border-ink/5 dark:border-stone-800 font-bold text-ink/50 dark:text-stone-400 text-[10px] uppercase tracking-wider">
                     Select Campus Hub
                   </div>
                   <button
                     type="button"
                     onClick={() => handleSelectCampus("ALL")}
-                    className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sand dark:hover:bg-stone-800 ${
-                      selectedCampus === "ALL" ? "font-bold text-moss dark:text-emerald-400 bg-moss/5" : "text-ink dark:text-white"
+                    className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
+                      selectedCampus === "ALL" ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
                     }`}
                   >
                     <span>🌐 All Bangalore Campuses</span>
@@ -168,8 +175,8 @@ export default function Navbar() {
                     <button
                       type="button"
                       onClick={() => handleSelectCampus(user.college!)}
-                      className={`w-full text-left px-3 py-2 flex items-center justify-between border-t border-b border-ink/5 dark:border-stone-800 hover:bg-sand dark:hover:bg-stone-800 ${
-                        selectedCampus === user.college ? "font-bold text-moss dark:text-emerald-400 bg-moss/5" : "text-ink dark:text-white"
+                      className={`w-full text-left px-3 py-2 flex items-center justify-between border-t border-b border-ink/5 dark:border-stone-800 hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
+                        selectedCampus === user.college ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
                       }`}
                     >
                       <span className="truncate">🎓 My Campus: {user.college}</span>
@@ -183,12 +190,12 @@ export default function Navbar() {
                         key={c.college}
                         type="button"
                         onClick={() => handleSelectCampus(c.college)}
-                        className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-sand dark:hover:bg-stone-800 ${
-                          selectedCampus === c.college ? "font-bold text-moss dark:text-emerald-400 bg-moss/5" : "text-ink dark:text-white"
+                        className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
+                          selectedCampus === c.college ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
                         }`}
                       >
                         <span className="truncate pr-2">{c.college}</span>
-                        <span className="text-[10px] text-ink/40 dark:text-stone-400">{c.count} items</span>
+                        <span className="text-[10px] text-ink/40 dark:text-stone-400 font-mono">{c.count} items</span>
                       </button>
                     ))}
                   </div>
@@ -202,7 +209,7 @@ export default function Navbar() {
           {/* Dark Mode Toggle Button */}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg text-ink/70 dark:text-stone-300 hover:bg-sand dark:hover:bg-stone-800 transition-colors"
+            className="p-2 rounded-xl text-ink/70 dark:text-stone-300 hover:bg-sand dark:hover:bg-stone-800 transition-colors"
             title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
             aria-label="Toggle Theme"
           >
@@ -212,7 +219,7 @@ export default function Navbar() {
           {/* Desktop Sell Button */}
           <Link
             href="/listings/new"
-            className="hidden sm:inline-flex items-center gap-1 bg-moss text-white font-semibold text-xs px-3.5 py-2 rounded-lg hover:bg-moss/90 shadow-sm transition-all"
+            className="hidden sm:inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-95"
           >
             <span>+</span> Sell Item
           </Link>
@@ -220,18 +227,18 @@ export default function Navbar() {
           {!loading && user ? (
             <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-ink/10 dark:border-stone-700">
               <NotificationBell />
-              <Link href="/profile" className="flex items-center gap-1.5 text-xs text-ink/80 dark:text-stone-200 hover:text-moss dark:hover:text-emerald-400 transition-colors">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-moss/20 to-emerald-100 dark:from-emerald-950 dark:to-stone-800 flex items-center justify-center font-bold text-[11px] text-moss dark:text-emerald-300 border border-moss/20 overflow-hidden">
+              <Link href="/profile" className="flex items-center gap-1.5 text-xs text-ink/80 dark:text-stone-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500/20 to-teal-100 dark:from-emerald-950 dark:to-stone-800 flex items-center justify-center font-bold text-[11px] text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 overflow-hidden ring-1 ring-emerald-500/20">
                   {user.avatar_url ? (
                     <img src={resolveImageUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
                     user.full_name?.charAt(0) || user.email.charAt(0).toUpperCase()
                   )}
                 </div>
-                <span className="font-medium hidden md:inline">{user.full_name || user.email.split("@")[0]}</span>
+                <span className="font-semibold hidden md:inline">{user.full_name || user.email.split("@")[0]}</span>
               </Link>
               {user.is_admin && (
-                <Link href="/admin" className="text-[11px] text-ink/40 dark:text-stone-400 hover:text-moss dark:hover:text-emerald-400 font-medium transition-colors" title="Admin Dashboard">
+                <Link href="/admin" className="text-[11px] text-ink/40 dark:text-stone-400 hover:text-emerald-600 dark:hover:text-emerald-400 font-medium transition-colors" title="Admin Dashboard">
                   🛡️
                 </Link>
               )}
@@ -247,13 +254,13 @@ export default function Navbar() {
             <div className="hidden sm:flex items-center gap-2">
               <Link
                 href="/login"
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-ink/20 dark:border-stone-700 text-ink dark:text-stone-200 hover:border-moss hover:text-moss transition-colors"
+                className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-ink/20 dark:border-stone-700 text-ink dark:text-stone-200 hover:border-moss hover:text-moss transition-colors"
               >
                 Log In
               </Link>
               <Link
                 href="/register"
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-moss text-white hover:bg-moss/90 transition-colors shadow-2xs"
+                className="text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all shadow-xs"
               >
                 Join
               </Link>

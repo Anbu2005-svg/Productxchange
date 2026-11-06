@@ -47,8 +47,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <PushNotificationBanner />
           <Navbar />
           <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6">{children}</main>
-          <footer className="border-t border-ink/10 dark:border-white/10 py-6 text-center text-xs text-ink/50 dark:text-stone-400">
-            ProductXchange — Location-First College Marketplace
+          <footer className="border-t border-ink/8 dark:border-white/10 py-8 bg-sand/50 dark:bg-[#111714] text-xs text-ink/60 dark:text-stone-400 mt-12 transition-colors">
+            <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs">
+                  🔄
+                </div>
+                <span className="font-bold text-ink dark:text-white">ProductXchange</span>
+                <span className="text-[11px] text-ink/40 dark:text-stone-500">• Campus Circular Economy</span>
+              </div>
+              <div className="flex items-center gap-4 text-xs font-medium">
+                <a href="/" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Nearby</a>
+                <a href="/deals" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Deals</a>
+                <a href="/impact" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Eco-Impact</a>
+                <a href="/chat" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Campus Chat</a>
+              </div>
+              <div className="text-[11px] text-ink/40 dark:text-stone-500">
+                Peer-to-Peer Student Marketplace • Handshake PIN Verified
+              </div>
+            </div>
           </footer>
         </ToastProvider>
       </body>

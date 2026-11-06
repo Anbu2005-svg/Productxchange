@@ -98,9 +98,9 @@ function LoginForm() {
 
   return (
     <div className="min-h-[75vh] flex items-center justify-center -mt-6">
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 bg-white dark:bg-stone-900 rounded-2xl shadow-lg overflow-hidden border border-ink/10 dark:border-white/10 animate-scale-in transition-colors">
+      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 bg-white/95 dark:bg-[#1a211d]/95 backdrop-blur-xl rounded-3xl shadow-xl overflow-hidden border border-ink/8 dark:border-white/10 animate-scale-in transition-colors">
         {/* Left: Branding Panel */}
-        <div className="hidden md:flex flex-col justify-between p-8 bg-gradient-to-br from-moss via-moss-dark to-emerald-900 text-white relative overflow-hidden">
+        <div className="hidden md:flex flex-col justify-between p-8 bg-gradient-to-br from-emerald-900 via-[#1c2b24] to-[#122019] text-white relative overflow-hidden">
           <div className="absolute -top-12 -right-12 w-40 h-40 bg-white/5 rounded-full" />
           <div className="absolute -bottom-16 -left-8 w-52 h-52 bg-white/5 rounded-full" />
 
@@ -108,7 +108,7 @@ function LoginForm() {
             <div className="flex items-center gap-2 mb-8">
               <span className="text-3xl">🔄</span>
               <span className="font-extrabold text-2xl tracking-tight">
-                Product<span className="text-emerald-300">Xchange</span>
+                Product<span className="text-emerald-400">Xchange</span>
               </span>
             </div>
 
@@ -244,7 +244,7 @@ function LoginForm() {
                 <button
                   type="submit"
                   disabled={!isEmailValid || !password || submitting}
-                  className="w-full bg-moss text-white font-semibold py-3 px-4 rounded-xl shadow-sm hover:bg-moss/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm flex items-center justify-center gap-2 active:scale-98"
                 >
                   {submitting ? "Signing in…" : "Sign in"}
                 </button>

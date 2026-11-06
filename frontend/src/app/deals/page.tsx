@@ -339,19 +339,19 @@ export default function DealsPage() {
       )}
 
       {!loading && !error && filtered.length === 0 && (
-        <div className="text-center py-16 bg-white border border-ink/10 rounded-2xl p-8">
-          <svg className="w-12 h-12 mx-auto text-ink/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="text-center py-16 bg-white dark:bg-[#1a211d] border border-ink/8 dark:border-white/10 rounded-3xl p-8 shadow-xs">
+          <svg className="w-12 h-12 mx-auto text-ink/30 dark:text-stone-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <h3 className="font-semibold text-ink text-base">No transactions found</h3>
-          <p className="text-xs text-ink/60 mt-1 max-w-sm mx-auto">
+          <h3 className="font-bold text-ink dark:text-white text-base">No transactions found</h3>
+          <p className="text-xs text-ink/60 dark:text-stone-400 mt-1 max-w-sm mx-auto">
             {activeTab === "actionable"
               ? "You have no offers waiting for your response right now."
               : "Browse campus listings to find essentials, or list something to start negotiating."}
           </p>
           <Link
             href="/"
-            className="mt-4 inline-block text-xs font-semibold text-moss underline hover:text-moss/80"
+            className="mt-4 inline-block text-xs font-semibold text-emerald-600 dark:text-emerald-400 underline hover:text-emerald-700"
           >
             Browse Nearby Items →
           </Link>
@@ -372,10 +372,10 @@ export default function DealsPage() {
           return (
             <div
               key={tx.id}
-              className={`bg-white dark:bg-stone-900 border rounded-2xl p-4 sm:p-5 shadow-sm transition-all ${
+              className={`bg-white dark:bg-[#1a211d] border rounded-3xl p-4 sm:p-5 shadow-xs transition-all ${
                 needsMyResponse
-                  ? "border-moss ring-1 ring-moss/30 dark:border-emerald-500/50 dark:ring-emerald-500/30"
-                  : "border-ink/10 dark:border-white/10"
+                  ? "border-emerald-500 ring-2 ring-emerald-500/20 dark:border-emerald-500/60 dark:ring-emerald-500/30"
+                  : "border-ink/8 dark:border-white/10 hover:border-ink/20 dark:hover:border-white/20"
               }`}
             >
               {/* Top Bar: Role & Status */}
@@ -490,19 +490,19 @@ export default function DealsPage() {
 
                   {/* Campus Meetup Handshake PIN Card */}
                   {tx.state === "CONFIRMED" && (
-                    <div className="mt-3 p-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/5 border border-emerald-500/30 rounded-2xl">
+                    <div className="mt-3 p-4 sm:p-5 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/5 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-stone-900 border border-emerald-500/30 rounded-2xl">
                       {isBuyer ? (
                         <div>
                           <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
                             <span>🤝</span>
-                            <span>Campus Handshake Pass (Your Secret PIN)</span>
+                            <span>Campus Handshake Pass (Your Secret Handover PIN)</span>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                            <span className="font-mono font-black text-lg tracking-widest text-emerald-950 dark:text-emerald-100 bg-white dark:bg-stone-800 px-3 py-1 rounded-lg border border-emerald-300 dark:border-emerald-700 shadow-sm">
+                          <div className="flex flex-wrap items-center gap-3 mt-2">
+                            <span className="font-mono font-black text-xl tracking-widest text-emerald-950 dark:text-emerald-100 bg-white dark:bg-stone-800 px-4 py-1.5 rounded-xl border border-emerald-400 dark:border-emerald-600 shadow-xs">
                               {tx.handshake_pin || "------"}
                             </span>
-                            <span className="text-xs text-ink/70 dark:text-stone-300">
-                              Show this PIN to the seller upon inspecting & receiving your item at the meetup.
+                            <span className="text-xs text-ink/75 dark:text-stone-300 max-w-md leading-relaxed">
+                              Show this PIN to the seller <strong>only upon meeting in person</strong> and physically verifying the item.
                             </span>
                           </div>
                         </div>
@@ -513,8 +513,8 @@ export default function DealsPage() {
                               <span>🤝</span>
                               <span>Verify Buyer Meetup Handover</span>
                             </div>
-                            <p className="text-xs text-ink/70 dark:text-stone-300 mt-1">
-                              Ask the buyer for their 6-digit handshake PIN to verify the handover and complete the deal.
+                            <p className="text-xs text-ink/75 dark:text-stone-300 mt-1 max-w-md leading-relaxed">
+                              Ask the buyer for their 6-digit handshake PIN to verify the handover and immediately complete the deal.
                             </p>
                           </div>
 
@@ -546,7 +546,7 @@ export default function DealsPage() {
                             ) : (
                               <button
                                 onClick={() => { setVerifyTxId(tx.id); setVerifyPinInput(""); }}
-                                className="text-xs bg-emerald-600 text-white font-semibold px-3 py-2 rounded-xl hover:bg-emerald-700 shadow-sm flex items-center gap-1.5 transition-all"
+                                className="text-xs bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold px-3.5 py-2 rounded-xl hover:from-emerald-500 hover:to-teal-500 shadow-sm flex items-center gap-1.5 transition-all"
                               >
                                 <span>🔑</span> Enter Buyer PIN
                               </button>
@@ -561,39 +561,39 @@ export default function DealsPage() {
                   {tx.state === "COMPLETED" && !reviewedTxIds.has(tx.id) && (
                     <div className="mt-3">
                       {reviewTxId === tx.id ? (
-                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3 animate-fade-in">
-                          <h4 className="text-xs font-bold text-ink uppercase tracking-wider">Rate this transaction</h4>
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-3 animate-fade-in text-ink dark:text-sand">
+                          <h4 className="text-xs font-bold text-ink dark:text-white uppercase tracking-wider">Rate this transaction</h4>
                           <div className="flex items-center gap-1">
                             {[1, 2, 3, 4, 5].map((star) => (
                               <button
                                 key={star}
                                 type="button"
                                 onClick={() => setReviewRating(star)}
-                                className={`text-2xl transition-transform hover:scale-110 ${star <= reviewRating ? "text-amber-400" : "text-ink/15"}`}
+                                className={`text-2xl transition-transform hover:scale-110 ${star <= reviewRating ? "text-amber-400" : "text-ink/15 dark:text-white/15"}`}
                               >
                                 ★
                               </button>
                             ))}
-                            <span className="text-xs text-ink/60 ml-2">{reviewRating}/5</span>
+                            <span className="text-xs text-ink/60 dark:text-stone-400 ml-2">{reviewRating}/5</span>
                           </div>
                           <textarea
                             placeholder="How was your experience? (optional)"
                             value={reviewComment}
                             onChange={(e) => setReviewComment(e.target.value)}
-                            className="w-full border border-ink/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-moss resize-none"
+                            className="w-full border border-ink/15 dark:border-stone-700 rounded-xl px-3 py-2 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss resize-none"
                             rows={2}
                           />
                           <div className="flex gap-2 justify-end">
                             <button
                               onClick={() => setReviewTxId(null)}
-                              className="text-xs px-3 py-1.5 border border-ink/20 rounded-lg text-ink hover:bg-white"
+                              className="text-xs px-3 py-1.5 border border-ink/20 dark:border-stone-700 rounded-xl text-ink dark:text-stone-300 hover:bg-white dark:hover:bg-stone-800"
                             >
                               Cancel
                             </button>
                             <button
                               disabled={submittingAction}
                               onClick={() => handleSubmitReview(tx.id)}
-                              className="text-xs bg-amber-500 text-white font-semibold px-4 py-1.5 rounded-lg hover:bg-amber-600 disabled:opacity-50"
+                              className="text-xs bg-amber-500 text-white font-semibold px-4 py-1.5 rounded-xl hover:bg-amber-600 disabled:opacity-50"
                             >
                               Submit Review
                             </button>
@@ -602,7 +602,7 @@ export default function DealsPage() {
                       ) : (
                         <button
                           onClick={() => { setReviewTxId(tx.id); setReviewRating(5); setReviewComment(""); }}
-                          className="text-xs text-amber-700 bg-amber-50 border border-amber-200 font-semibold px-3.5 py-2 rounded-lg hover:bg-amber-100 transition-colors inline-flex items-center gap-1.5"
+                          className="text-xs text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 font-semibold px-3.5 py-2 rounded-xl hover:bg-amber-500/20 transition-colors inline-flex items-center gap-1.5"
                         >
                           ⭐ Leave a Review
                         </button>
