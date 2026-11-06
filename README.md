@@ -90,17 +90,23 @@ ProductXchange is a decentralized, location-first peer-to-peer marketplace tailo
 
 ## Running the Automated Test Suite
 
-A complete suite of automated unit and integration tests verifies authentication, access control, state machine transitions, privacy enforcement, and search filtering:
+A complete suite of **115 automated unit, integration, and adversarial security tests** verifies authentication, access control, state machine transitions, privacy enforcement, search filtering, and penetration loopholes:
 
 ```bash
 # Run all tests with pytest
 .\venv\Scripts\pytest backend\tests -v
 ```
 
-### Test Coverage Summary:
-- **`test_auth.py`**: User registration, duplicate prevention, credential verification, suspended account blocking, OTP rate-limiting, and `httpOnly` cookie lifecycle.
-- **`test_transactions.py`**: Offer creation, authorization enforcement (preventing self-accept/counter), negotiation flow, and dual-party confirmation and completion.
-- **`test_products.py`**: Product CRUD, pickup area masking for strangers, revealed pickup for confirmed deals, coordinate blurring, and blocked user exclusion.
+### Test Coverage Summary (115 Passing Tests):
+- **`test_adversarial_security_suite.py`**: 13 penetration test cases preventing rug-pull deletions, ghost product messaging, suspended account exploitation, algorithm-none JWT bypasses, stored XSS, self-blocking, and invalid targets.
+- **`test_all_features_master_suite.py`**: Comprehensive end-to-end integration across all 14 core system capabilities.
+- **`test_auth.py` & `test_admin_and_auth_conditions.py`**: User registration, credential verification, admin capabilities, suspended account lockout, OTP rate-limiting, and `httpOnly` cookie lifecycle.
+- **`test_transactions.py` & `test_transaction_conditions.py`**: State machine transitions, negotiation rules, handshake PIN verification, dual-party sign-off, and counterparty authorization.
+- **`test_products.py` & `test_product_conditions.py`**: Product CRUD, pickup area masking for strangers, revealed pickup for confirmed deals, coordinate blurring, and blocked user exclusion.
+- **`test_multi_campus_and_3d.py`**: Multi-campus aggregation, college-specific filtering, and 360° turntable asset handling.
+- **`test_chat_and_trust_conditions.py`**: Real-time messaging, unread counts, reviews, reports, and mutual blocking.
+- **`test_geospatial_and_notification_conditions.py`**: PostGIS spherical distance math, proximity sorting, and notification triggers.
+- **`test_analytics_and_websockets.py`**: Campus sustainability analytics and real-time deal WebSockets.
 - **`test_health.py`**: API service availability and health checks.
 
 ---
