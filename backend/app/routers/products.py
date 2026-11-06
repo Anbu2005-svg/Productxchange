@@ -461,6 +461,28 @@ def delete_product(product_id: int, user: User = Depends(get_current_user), db: 
         raise HTTPException(status_code=404, detail="Product not found")
     if product.seller_id != user.id:
         raise HTTPException(status_code=403, detail="Not your listing")
+
+    # Anti exit-scam / anti rug-pull: Prevent removing product with active negotiations or confirmed deals
+    active_states = {
+        TransactionState.PENDING,
+        TransactionState.COUNTERED,
+        TransactionState.ACCEPTED,
+        TransactionState.CONFIRMED,
+    }
+    has_active_tx = (
+        db.query(Transaction)
+        .filter(
+            Transaction.product_id == product.id,
+            Transaction.state.in_(active_states),
+        )
+        .first()
+    )
+    if has_active_tx:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot remove listing while active negotiations or confirmed deals are open. Cancel or complete open deals first.",
+        )
+
     product.status = ProductStatus.REMOVED
 
     # Clean up local storage image files associated with this listing

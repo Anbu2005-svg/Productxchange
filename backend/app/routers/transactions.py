@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.security import get_current_user
 from app.core.rate_limit import check_rate_limit
 from app.models.user import User
-from app.models.product import Product
+from app.models.product import Product, ProductStatus
 from app.models.transaction import Transaction, TransactionState
 from app.schemas.transaction import TransactionCreate, TransactionAction, TransactionOut, HandshakeVerify
 from app.services.transaction_service import TransactionService
@@ -47,8 +47,27 @@ def create_transaction(payload: TransactionCreate, user: User = Depends(get_curr
     product = product_query.first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    if product.status != ProductStatus.ACTIVE:
+        raise HTTPException(status_code=400, detail="Cannot transact on an inactive or already sold listing.")
     if product.seller_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot transact on your own listing")
+
+    # Anti-harassment: Verify parties have not blocked each other
+    from app.models.report import Block
+    from sqlalchemy import or_, and_
+    is_blocked = db.query(Block).filter(
+        or_(
+            and_(Block.blocker_id == user.id, Block.blocked_id == product.seller_id),
+            and_(Block.blocker_id == product.seller_id, Block.blocked_id == user.id),
+        )
+    ).first()
+    if is_blocked:
+        raise HTTPException(status_code=403, detail="Cannot initiate transaction with a blocked user.")
+
+    # Verify seller account is active
+    seller = db.query(User).filter(User.id == product.seller_id).first()
+    if not seller or seller.is_blocked_flag:
+        raise HTTPException(status_code=400, detail="Seller account is unavailable or suspended.")
 
     # Prevent duplicate active transactions on the same product by the same buyer
     active_states = {

@@ -25,6 +25,10 @@ def create_review(payload: ReviewCreate, user: User = Depends(get_current_user),
         raise HTTPException(status_code=400, detail="Rating must be 1-5")
 
     reviewee_id = tx.seller_id if user.id == tx.buyer_id else tx.buyer_id
+    reviewee = db.query(User).filter(User.id == reviewee_id).first()
+    if not reviewee:
+        raise HTTPException(status_code=404, detail="Reviewee user account not found")
+
     existing = db.query(Review).filter(
         Review.transaction_id == tx.id,
         Review.reviewer_id == user.id,
@@ -36,7 +40,6 @@ def create_review(payload: ReviewCreate, user: User = Depends(get_current_user),
                      rating=payload.rating, comment=payload.comment)
     db.add(review)
 
-    reviewee = db.query(User).filter(User.id == reviewee_id).first()
     total = reviewee.avg_rating * reviewee.rating_count + payload.rating
     reviewee.rating_count += 1
     reviewee.avg_rating = round(total / reviewee.rating_count, 2)
@@ -47,10 +50,24 @@ def create_review(payload: ReviewCreate, user: User = Depends(get_current_user),
 
 @router.post("/reports")
 def create_report(payload: ReportCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.models.product import Product
+
     if not payload.reported_user_id and not payload.reported_product_id:
         raise HTTPException(status_code=400, detail="Must report a user or a listing")
     if payload.reported_user_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot report yourself")
+
+    if payload.reported_user_id:
+        target_u = db.query(User).filter(User.id == payload.reported_user_id).first()
+        if not target_u:
+            raise HTTPException(status_code=404, detail="Reported user not found")
+
+    if payload.reported_product_id:
+        target_p = db.query(Product).filter(Product.id == payload.reported_product_id).first()
+        if not target_p:
+            raise HTTPException(status_code=404, detail="Reported product not found")
+        if target_p.seller_id == user.id:
+            raise HTTPException(status_code=400, detail="Cannot report your own listing")
 
     # Prevent duplicate spam reports while previous report is pending
     query = db.query(Report).filter(Report.reporter_id == user.id, Report.resolved == False)  # noqa: E712
@@ -80,6 +97,12 @@ def create_report(payload: ReportCreate, user: User = Depends(get_current_user),
 def block_user(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot block yourself")
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target_user.is_admin:
+        raise HTTPException(status_code=400, detail="Cannot block an administrator account.")
+
     existing = db.query(Block).filter(Block.blocker_id == user.id, Block.blocked_id == user_id).first()
     if not existing:
         db.add(Block(blocker_id=user.id, blocked_id=user_id))

@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request, UploadFile, File
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from sqlalchemy.orm import Session
 from geoalchemy2.functions import ST_MakePoint, ST_SetSRID
 from jose import jwt, JWTError
@@ -38,7 +38,13 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     token: str
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def check_password_complexity(cls, v: str) -> str:
+        from app.core.security import validate_password_strength
+        return validate_password_strength(v)
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])

@@ -134,9 +134,10 @@ def unsuspend_user(user_id: int, db: Session = Depends(get_db)):
 @router.post("/listings/{product_id}/remove")
 def remove_listing(product_id: int, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
-    if product:
-        product.status = ProductStatus.REMOVED
-        db.commit()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    product.status = ProductStatus.REMOVED
+    db.commit()
     return {"message": "Listing removed"}
 
 

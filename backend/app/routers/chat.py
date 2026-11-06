@@ -38,6 +38,12 @@ def start_conversation(other_user_id: int, product_id: Optional[int] = None, use
     if _blocked_between(db, user.id, other_user_id):
         raise HTTPException(status_code=403, detail="Cannot message this user")
 
+    if product_id is not None:
+        from app.models.product import Product
+        prod = db.query(Product).filter(Product.id == product_id).first()
+        if not prod:
+            raise HTTPException(status_code=404, detail="Product not found")
+
     existing = db.query(Conversation).filter(
         or_(
             and_(Conversation.user_a_id == user.id, Conversation.user_b_id == other_user_id),
@@ -158,6 +164,10 @@ async def send_message(conversation_id: int, payload: MessageCreate, user: User 
         raise HTTPException(status_code=403, detail="Not part of this conversation")
 
     other_id = convo.user_b_id if user.id == convo.user_a_id else convo.user_a_id
+    other_user = db.query(User).filter(User.id == other_id).first()
+    if not other_user or other_user.is_blocked_flag:
+        raise HTTPException(status_code=403, detail="Cannot message a suspended or unavailable user")
+
     if _blocked_between(db, user.id, other_id):
         raise HTTPException(status_code=403, detail="Cannot message this user")
 
@@ -176,8 +186,6 @@ async def send_message(conversation_id: int, payload: MessageCreate, user: User 
         f"{content[:80]}{'...' if len(content) > 80 else ''}",
         f"/chat/{conversation_id}"
     )
-
-    other_user = db.query(User).filter(User.id == other_id).first()
     if other_user and other_user.email:
         from app.services.email_service import send_new_message_alert
         send_new_message_alert(
