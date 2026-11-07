@@ -39,10 +39,14 @@ def start_conversation(other_user_id: int, product_id: Optional[int] = None, use
         raise HTTPException(status_code=403, detail="Cannot message this user")
 
     if product_id is not None:
-        from app.models.product import Product
+        from app.models.product import Product, ProductStatus
         prod = db.query(Product).filter(Product.id == product_id).first()
         if not prod:
             raise HTTPException(status_code=404, detail="Product not found")
+        if prod.status == ProductStatus.REMOVED:
+            raise HTTPException(status_code=400, detail="Cannot initiate conversation on a removed listing")
+        if user.id != prod.seller_id and other_user_id != prod.seller_id:
+            raise HTTPException(status_code=400, detail="One of the conversation participants must be the listing owner")
 
     existing = db.query(Conversation).filter(
         or_(

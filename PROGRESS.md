@@ -12,3 +12,5 @@
 - [x] Step 10: Automated Test Suite & Security Hardening (100% Passing Tests)
 - [x] Step 11: Adversarial Hacker-Style Penetration Testing & Exploit Elimination (115/115 Passing Tests)
 - [x] Step 12: Modern UI Revamp (Elevated Glassmorphism, Campus Hero, Category Ribbon, Handshake Pass)
+- [x] Step 13: Dependency & CVE Security Patching (`fastapi>=0.115.4`, `starlette>=0.40.0`, `python-multipart>=0.0.20`, npm audit fixes)
+- [x] Step 14: Advanced Hacker Penetration Testing Suite & Exploitation Hardening (127/127 Passing Tests across 18 Modules)

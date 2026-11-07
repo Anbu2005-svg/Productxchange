@@ -171,7 +171,7 @@ class MessageCreate(BaseModel):
         if v is None or v == "":
             return None
         v = v.strip()
-        if not (v.startswith("http://") or v.startswith("https://") or v.startswith("/uploads/")):
-            raise ValueError("image_url must start with http://, https://, or /uploads/")
+        if not (v.startswith("https://") or v.startswith("/uploads/")):
+            raise ValueError("image_url must start with https:// or /uploads/")
         return v
 

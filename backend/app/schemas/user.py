@@ -3,6 +3,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: str
     full_name: Optional[str] = None
@@ -17,11 +19,10 @@ class UserOut(BaseModel):
     longitude: Optional[float] = None
     location_radius_pref_km: int
 
-    class Config:
-        from_attributes = True
-
 
 class PublicUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
@@ -29,9 +30,6 @@ class PublicUserOut(BaseModel):
     is_verified: bool
     avg_rating: float
     rating_count: int
-
-    class Config:
-        from_attributes = True
 
 
 class UserUpdate(BaseModel):

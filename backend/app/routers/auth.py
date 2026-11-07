@@ -526,6 +526,12 @@ def delete_account(user: User = Depends(get_current_user), db: Session = Depends
             detail="Cannot delete account with active in-progress deals. Please complete or cancel them first.",
         )
 
+    # Cancel any pending / countered negotiations cleanly so neither party is stuck
+    db.query(Transaction).filter(
+        ((Transaction.buyer_id == user.id) | (Transaction.seller_id == user.id)),
+        Transaction.state.in_([TransactionState.PENDING, TransactionState.COUNTERED]),
+    ).update({"state": TransactionState.CANCELLED}, synchronize_session=False)
+
     # Soft-remove user listings
     db.query(Product).filter(Product.seller_id == user.id).update({"status": ProductStatus.REMOVED})
 

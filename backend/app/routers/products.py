@@ -156,12 +156,15 @@ def list_products(
     college: Optional[str] = None,
     has_3d: Optional[bool] = None,
     q: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 20,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
     user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
     """Browse/filter active listings with blocked users excluded, campus filter, 3D filter, and pagination."""
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise HTTPException(status_code=400, detail="min_price cannot be greater than max_price")
+
     query = db.query(Product).filter(Product.status == ProductStatus.ACTIVE)
     query = _apply_blocked_filters(query, user, db)
 
@@ -202,9 +205,9 @@ def list_products(
 @router.get("/nearby/search", response_model=List[ProductOut])
 def nearby_products(
     response: Response,
-    lat: float,
-    lng: float,
-    radius_km: int = Query(default=settings.DEFAULT_SEARCH_RADIUS_KM, le=settings.MAX_SEARCH_RADIUS_KM),
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lng: float = Query(..., ge=-180.0, le=180.0),
+    radius_km: int = Query(default=settings.DEFAULT_SEARCH_RADIUS_KM, ge=1, le=settings.MAX_SEARCH_RADIUS_KM),
     category: Optional[str] = None,
     transaction_type: Optional[str] = None,
     condition: Optional[str] = None,
@@ -214,8 +217,8 @@ def nearby_products(
     has_3d: Optional[bool] = None,
     q: Optional[str] = None,
     sort: str = Query(default="distance", pattern="^(distance|recent)$"),
-    limit: int = 30,
-    offset: int = 0,
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
@@ -223,6 +226,9 @@ def nearby_products(
     PostGIS distance filter + optional keyword search with blocked user exclusion,
     campus filter, 3D filter, advanced filters, and pickup privacy protection.
     """
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise HTTPException(status_code=400, detail="min_price cannot be greater than max_price")
+
     point = cast(ST_SetSRID(ST_MakePoint(lng, lat), 4326), Geography)
     distance_expr = ST_Distance(Product.location, point).label("distance_m")
 
@@ -422,6 +428,8 @@ def update_product(product_id: int, payload: ProductUpdate, user: User = Depends
         raise HTTPException(status_code=404, detail="Product not found")
     if product.seller_id != user.id:
         raise HTTPException(status_code=403, detail="Not your listing")
+    if product.status in (ProductStatus.SOLD, ProductStatus.REMOVED):
+        raise HTTPException(status_code=400, detail="Cannot edit a product that is already sold or removed.")
 
     # Prevent bait-and-switch: freeze edits on price/title/description while active deals exist
     active_states = {
@@ -461,6 +469,8 @@ def delete_product(product_id: int, user: User = Depends(get_current_user), db: 
         raise HTTPException(status_code=404, detail="Product not found")
     if product.seller_id != user.id:
         raise HTTPException(status_code=403, detail="Not your listing")
+    if product.status in (ProductStatus.SOLD, ProductStatus.REMOVED):
+        raise HTTPException(status_code=400, detail="Cannot remove a product that is already sold or removed.")
 
     # Anti exit-scam / anti rug-pull: Prevent removing product with active negotiations or confirmed deals
     active_states = {
@@ -539,8 +549,12 @@ def upload_image(
     db: Session = Depends(get_db),
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
-    if not product or product.seller_id != user.id:
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if product.seller_id != user.id:
         raise HTTPException(status_code=403, detail="Not your listing")
+    if product.status in (ProductStatus.SOLD, ProductStatus.REMOVED):
+        raise HTTPException(status_code=400, detail="Cannot upload photos to a sold or removed listing.")
 
     current_images = []
     if product.image_urls:
@@ -657,8 +671,12 @@ def convert_to_3d(
         )
 
     product = db.query(Product).filter(Product.id == product_id).first()
-    if not product or product.seller_id != user.id:
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if product.seller_id != user.id:
         raise HTTPException(status_code=403, detail="Not your listing")
+    if product.status in (ProductStatus.SOLD, ProductStatus.REMOVED):
+        raise HTTPException(status_code=400, detail="Cannot convert a sold or removed listing to 3D.")
 
     incoming_angles = (payload or {}).get("angles") if payload else None
 

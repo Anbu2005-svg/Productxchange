@@ -91,6 +91,16 @@ def create_transaction(payload: TransactionCreate, user: User = Depends(get_curr
             detail="You already have an active negotiation or transaction on this item.",
         )
 
+    # Validate offer amounts per transaction type
+    prod_type = product.transaction_type.value if hasattr(product.transaction_type, "value") else str(product.transaction_type)
+    if prod_type == "BUY" and (payload.offer_amount is None or payload.offer_amount <= 0):
+        raise HTTPException(status_code=400, detail="Offer amount must be greater than zero for buy listings.")
+    if prod_type == "RENT":
+        if payload.rental_period_days is None or payload.rental_period_days <= 0:
+            raise HTTPException(status_code=400, detail="Rental period in days is required for rental listings.")
+        if payload.offer_amount is None or payload.offer_amount <= 0:
+            raise HTTPException(status_code=400, detail="Offer amount must be greater than zero for rental listings.")
+
     svc = TransactionService(db)
     tx = svc.create(
         product_id=product.id,
@@ -132,6 +142,8 @@ def act_on_transaction(tx_id: int, payload: TransactionAction, user: User = Depe
     if action == "counter":
         if payload.counter_amount is None:
             raise HTTPException(status_code=400, detail="counter_amount required")
+        if payload.counter_amount <= 0:
+            raise HTTPException(status_code=400, detail="Counter amount must be greater than zero.")
         return _tx_to_out(svc.counter(tx, user.id, payload.counter_amount, payload.message), user)
     if action == "confirm":
         return _tx_to_out(svc.confirm(tx, user.id), user)

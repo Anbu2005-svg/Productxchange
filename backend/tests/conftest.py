@@ -109,10 +109,22 @@ def db():
 
 @pytest.fixture(autouse=True)
 def clean_tables(db):
+    from app.core.rate_limit import _local_rate_store
+    from app.routers.auth import _local_login_attempts, _local_otp_store, _local_otp_failures, _local_otp_cooldowns
+    _local_rate_store.clear()
+    _local_login_attempts.clear()
+    _local_otp_store.clear()
+    _local_otp_failures.clear()
+    _local_otp_cooldowns.clear()
     yield
     for table in reversed(Base.metadata.sorted_tables):
         db.execute(table.delete())
     db.commit()
+    _local_rate_store.clear()
+    _local_login_attempts.clear()
+    _local_otp_store.clear()
+    _local_otp_failures.clear()
+    _local_otp_cooldowns.clear()
 
 
 @pytest.fixture

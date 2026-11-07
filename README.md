@@ -90,14 +90,15 @@ ProductXchange is a decentralized, location-first peer-to-peer marketplace tailo
 
 ## Running the Automated Test Suite
 
-A complete suite of **115 automated unit, integration, and adversarial security tests** verifies authentication, access control, state machine transitions, privacy enforcement, search filtering, and penetration loopholes:
+A complete suite of **127 automated unit, integration, and adversarial security tests** verifies authentication, access control, state machine transitions, privacy enforcement, search filtering, and penetration loopholes:
 
 ```bash
 # Run all tests with pytest
 .\venv\Scripts\pytest backend\tests -v
 ```
 
-### Test Coverage Summary (115 Passing Tests):
+### Test Coverage Summary (127 Passing Tests across 18 Test Modules):
+- **`test_hacker_penetration_suite.py`**: 12 hacker penetration tests verifying zero-day defenses: blocking mutations on SOLD/REMOVED items, auto-cancelling orphaned negotiations upon account closure, blocking third-party spoofed product IDs in chat, brute-force PIN rate-limiting, zero/negative price guards on buy listings, spatial coordinate bounding [-90, 90], inverted price window validation, insecure HTTP attachment blocking, spreadsheet formula injection defense (CWE-1236), 24h bump spam cooldowns, and cross-conversation access denial.
 - **`test_adversarial_security_suite.py`**: 13 penetration test cases preventing rug-pull deletions, ghost product messaging, suspended account exploitation, algorithm-none JWT bypasses, stored XSS, self-blocking, and invalid targets.
 - **`test_all_features_master_suite.py`**: Comprehensive end-to-end integration across all 14 core system capabilities.
 - **`test_auth.py` & `test_admin_and_auth_conditions.py`**: User registration, credential verification, admin capabilities, suspended account lockout, OTP rate-limiting, and `httpOnly` cookie lifecycle.
