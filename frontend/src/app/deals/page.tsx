@@ -431,6 +431,21 @@ export default function DealsPage() {
                     <span className="text-moss dark:text-emerald-400 font-bold text-sm">
                       Current Agreed Price: ₹{tx.agreed_price != null ? tx.agreed_price : (lastOffer?.amount || tx.product?.price || 0)}
                     </span>
+                    {tx.rental_period_days && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                        ⏱️ Rental: {tx.rental_period_days} Days
+                      </span>
+                    )}
+                    {tx.product?.transaction_type === "DONATE" && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-900 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
+                        🎁 Free Campus Donation
+                      </span>
+                    )}
+                    {tx.product?.transaction_type === "EXCHANGE" && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 dark:border-blue-800">
+                        🔄 Campus Exchange
+                      </span>
+                    )}
                   </div>
 
                   {/* Negotiation Offer History Thread */}

@@ -29,6 +29,7 @@ export default function ListingDetailPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [offerAmount, setOfferAmount] = useState("");
+  const [rentalDays, setRentalDays] = useState("30");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [createdTxId, setCreatedTxId] = useState<number | null>(null);
@@ -80,13 +81,31 @@ export default function ListingDetailPage() {
     setError(null);
     setSubmittingOffer(true);
     try {
+      const isBuy = product.transaction_type === "BUY";
+      const isRent = product.transaction_type === "RENT";
+      const isExchange = product.transaction_type === "EXCHANGE";
+      const isDonate = product.transaction_type === "DONATE";
+
+      let finalAmount: number | null = null;
+      if (isBuy || isRent) {
+        finalAmount = offerAmount ? Number(offerAmount) : (product.price || null);
+      } else if (isExchange || isDonate) {
+        finalAmount = 0.0;
+      }
+
+      const payload: any = {
+        product_id: product.id,
+        offer_amount: finalAmount,
+        notes: notes || null,
+      };
+
+      if (isRent) {
+        payload.rental_period_days = rentalDays ? Math.max(1, Math.min(365, Number(rentalDays))) : 30;
+      }
+
       const res = await api("/transactions", {
         method: "POST",
-        body: JSON.stringify({
-          product_id: product.id,
-          offer_amount: offerAmount ? Number(offerAmount) : null,
-          notes: notes || null,
-        }),
+        body: JSON.stringify(payload),
       });
       setCreatedTxId(res.id);
       setStatus("Offer sent successfully! The seller has been notified.");
@@ -459,38 +478,84 @@ export default function ListingDetailPage() {
           {/* Make an Offer / Negotiation Box */}
           {!isSeller && (
             <div className="mt-4 border-t border-ink/10 dark:border-stone-800 pt-4">
-              <h3 className="text-sm font-bold text-ink dark:text-white mb-1">Start Deal / Make an Offer</h3>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-bold text-ink dark:text-white">
+                  {product.transaction_type === "RENT" && "Request Rental / Propose Terms"}
+                  {product.transaction_type === "EXCHANGE" && "Propose Campus Exchange"}
+                  {product.transaction_type === "DONATE" && "Request Free Donation Pickup"}
+                  {product.transaction_type === "BUY" && "Start Deal / Make an Offer"}
+                </h3>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border border-ink/10 dark:border-stone-700 bg-sand/60 dark:bg-stone-800 text-ink/70 dark:text-stone-300">
+                  {product.transaction_type}
+                </span>
+              </div>
               <p className="text-xs text-ink/60 dark:text-stone-400 mb-3">
-                Propose your price or rental terms. You and the seller can negotiate via the Deals dashboard.
+                {product.transaction_type === "RENT" && "Specify your proposed rental rate and duration. Handover is verified via secure PIN."}
+                {product.transaction_type === "EXCHANGE" && "Propose an exchange with the seller. Mention the item you wish to trade in notes."}
+                {product.transaction_type === "DONATE" && "This academic item is freely donated! Send a request to coordinate campus pickup."}
+                {product.transaction_type === "BUY" && "Propose your price or accept listing price. Coordinate safely via the Deals dashboard."}
               </p>
 
               <div className="space-y-2.5">
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-2.5 text-xs text-ink/40 dark:text-stone-500 font-bold">₹</span>
-                    <input
-                      className="w-full border border-ink/20 dark:border-stone-700 rounded-lg pl-7 pr-3 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 font-semibold focus:outline-none focus:border-moss"
-                      placeholder="Offer price"
-                      type="number"
-                      value={offerAmount}
-                      onChange={(e) => setOfferAmount(e.target.value)}
-                    />
+                {(product.transaction_type === "BUY" || product.transaction_type === "RENT") && (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-2.5 text-xs text-ink/40 dark:text-stone-500 font-bold">₹</span>
+                      <input
+                        className="w-full border border-ink/20 dark:border-stone-700 rounded-lg pl-7 pr-3 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 font-semibold focus:outline-none focus:border-moss"
+                        placeholder={product.transaction_type === "RENT" ? "Rental rate" : "Offer price"}
+                        type="number"
+                        min="1"
+                        value={offerAmount}
+                        onChange={(e) => setOfferAmount(e.target.value)}
+                      />
+                    </div>
+                    {product.transaction_type === "RENT" && (
+                      <div className="relative w-full sm:w-36">
+                        <input
+                          className="w-full border border-ink/20 dark:border-stone-700 rounded-lg px-3 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 font-semibold focus:outline-none focus:border-moss"
+                          placeholder="Days (30)"
+                          type="number"
+                          min="1"
+                          max="365"
+                          value={rentalDays}
+                          onChange={(e) => setRentalDays(e.target.value)}
+                          title="Rental duration in days"
+                        />
+                      </div>
+                    )}
                   </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    className="flex-1 border border-ink/20 dark:border-stone-700 rounded-lg px-3 py-2 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
+                    placeholder={
+                      product.transaction_type === "EXCHANGE"
+                        ? "Describe the item you are trading (e.g. Mini Drafter in good shape)"
+                        : product.transaction_type === "DONATE"
+                        ? "Brief note (e.g. 1st year student, can meet after class at library)"
+                        : "Optional note (e.g. Can meet after 4 PM at cafeteria)"
+                    }
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
                   <button
                     onClick={sendOffer}
                     disabled={submittingOffer}
                     className="bg-moss text-white text-sm font-semibold rounded-lg px-5 py-2 hover:bg-moss/90 disabled:opacity-50 transition-colors shrink-0 shadow-sm touch-manipulation"
                   >
-                    {submittingOffer ? "Sending…" : "Send Offer"}
+                    {submittingOffer
+                      ? "Sending…"
+                      : product.transaction_type === "RENT"
+                      ? "Request Rental"
+                      : product.transaction_type === "EXCHANGE"
+                      ? "Propose Exchange"
+                      : product.transaction_type === "DONATE"
+                      ? "Request Free Pickup"
+                      : "Send Offer"}
                   </button>
                 </div>
-
-                <input
-                  className="w-full border border-ink/20 dark:border-stone-700 rounded-lg px-3 py-2 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-                  placeholder="Optional note (e.g. Can meet after 4 PM at cafeteria)"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
               </div>
 
               {status && (
