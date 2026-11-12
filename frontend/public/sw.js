@@ -74,7 +74,11 @@ self.addEventListener("push", (event) => {
 // Notification click interaction
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || "/deals";
+  const rawUrl = event.notification.data?.url || "/deals";
+  const targetUrl =
+    typeof rawUrl === "string" && rawUrl.startsWith("/") && !rawUrl.startsWith("//") && !rawUrl.startsWith("/\\")
+      ? rawUrl
+      : "/deals";
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {

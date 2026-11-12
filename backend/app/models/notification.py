@@ -14,3 +14,14 @@ class Notification(Base):
     link = Column(String, nullable=True)  # URL to navigate to
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint = Column(String, unique=True, nullable=False, index=True)
+    p256dh = Column(String, nullable=True)
+    auth = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

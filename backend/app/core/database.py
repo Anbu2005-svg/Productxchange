@@ -48,6 +48,10 @@ def _parse_pt(pt_str):
 
 
 def register_sqlite_functions(dbapi_connection, connection_record=None):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON;")
+    cursor.close()
+
     dbapi_connection.create_function("CreateSpatialIndex", 2, lambda a, b: 1)
     dbapi_connection.create_function("InitSpatialMetaData", 0, lambda: 1)
     dbapi_connection.create_function("AsBinary", 1, lambda a: a.encode("utf-8") if isinstance(a, str) else (a or b""))

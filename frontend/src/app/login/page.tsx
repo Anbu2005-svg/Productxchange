@@ -6,6 +6,15 @@ import Link from "next/link";
 import { api, setToken, getToken } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
+function getSafeRedirectUrl(url: string | null): string {
+  if (!url) return "/";
+  // Open redirect defense: reject external domains, protocol-relative '//' and backslashes '/\'
+  if (url.startsWith("/") && !url.startsWith("//") && !url.startsWith("/\\")) {
+    return url;
+  }
+  return "/";
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -46,7 +55,7 @@ function LoginForm() {
       });
       setToken(access_token);
       showToast("Welcome back! 👋", "success");
-      const redirect = searchParams.get("redirect") || "/";
+      const redirect = getSafeRedirectUrl(searchParams.get("redirect"));
       router.push(redirect);
     } catch (err: any) {
       setError(err.message);

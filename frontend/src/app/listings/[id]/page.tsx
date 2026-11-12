@@ -186,7 +186,7 @@ export default function ListingDetailPage() {
   function handleShareWhatsApp() {
     if (!product || typeof window === "undefined") return;
     const text = `Check out "${product.title}" on ProductXchange for ₹${product.price || 0}! Meetup at campus: ${window.location.href}`;
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   }
 
   function handleNativeShare() {

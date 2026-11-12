@@ -43,7 +43,7 @@ export default function RegisterPage() {
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
   const isNameValid = form.full_name.trim().length >= 2;
-  const isPasswordValid = form.password.length >= 6;
+  const isPasswordValid = form.password.length >= 8 && /[A-Za-z]/.test(form.password) && /[0-9]/.test(form.password);
   const doPasswordsMatch = form.password === form.confirmPassword;
   const strength = getPasswordStrength(form.password);
 
@@ -226,7 +226,7 @@ export default function RegisterPage() {
                 <input
                   id="reg-password"
                   className="w-full border border-ink/15 dark:border-stone-700 rounded-xl pl-10 pr-11 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800/80 focus:outline-none focus:border-moss transition-colors"
-                  placeholder="Minimum 6 characters"
+                  placeholder="Minimum 8 characters (letters & numbers)"
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   value={form.password}
