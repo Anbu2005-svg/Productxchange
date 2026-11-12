@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request, UploadFile, File
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from geoalchemy2.functions import ST_MakePoint, ST_SetSRID
 from jose import jwt, JWTError
 
@@ -64,6 +65,18 @@ _local_otp_store: dict[str, dict] = {}
 _local_otp_failures: dict[str, dict] = {}  # {phone: {"count": int, "first_at": float}}
 _local_login_attempts: dict[str, dict] = {}
 _local_otp_cooldowns: dict[str, float] = {}  # {phone: last_request_timestamp}
+
+
+def _normalize_phone(phone: Optional[str]) -> Optional[str]:
+    """Canonicalize phone numbers by stripping non-digits, whitespace, leading zeros, and +91/91 country prefix."""
+    if not phone:
+        return None
+    digits = "".join(c for c in phone if c.isdigit())
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    return digits
 
 
 def _set_auth_cookie(response: Response, token: str):
@@ -211,14 +224,15 @@ def _mask_email(email: str) -> str:
 
 @router.post("/register", response_model=TokenResponse)
 def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == payload.email).first()
+    clean_email = payload.email.strip().lower()
+    existing = db.query(User).filter(func.lower(User.email) == clean_email).first()
     if existing:
         # Constant-time response: hash the password even when rejecting to prevent timing leak
         hash_password(payload.password)
         raise HTTPException(status_code=400, detail="Registration failed. Please try a different email or login.")
 
     user = User(
-        email=payload.email,
+        email=clean_email,
         password_hash=hash_password(payload.password),
         full_name=payload.full_name,
         phone=payload.phone,
@@ -235,16 +249,17 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    _check_login_rate_limit(payload.email)
+    clean_email = payload.email.strip().lower()
+    _check_login_rate_limit(clean_email)
 
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = db.query(User).filter(func.lower(User.email) == clean_email).first()
     if not user:
         # Constant-time: hash a dummy password to prevent timing side-channel enumeration
         verify_password(payload.password, hash_password("dummy-constant-time-pad"))
-        _record_login_failure(payload.email)
+        _record_login_failure(clean_email)
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not verify_password(payload.password, user.password_hash):
-        _record_login_failure(payload.email)
+        _record_login_failure(clean_email)
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if user.is_blocked_flag:
         raise HTTPException(
@@ -252,7 +267,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
             detail="Account is suspended. Please contact administrator.",
         )
 
-    _record_login_success(payload.email)
+    _record_login_success(clean_email)
     token = create_access_token(subject=str(user.id))
     _set_auth_cookie(response, token)
     return TokenResponse(access_token=token)
@@ -274,7 +289,7 @@ def request_otp(
     db: Session = Depends(get_db),
 ):
     """Request OTP for phone verification. Requires authentication to prevent abuse."""
-    clean_phone = "".join(c for c in phone if c.isdigit())
+    clean_phone = _normalize_phone(phone) or ""
     if len(clean_phone) < 10 or len(clean_phone) > 15:
         raise HTTPException(
             status_code=400,
@@ -289,58 +304,60 @@ def request_otp(
             detail="This phone number is already associated with another account.",
         )
 
-    _check_otp_cooldown(phone)  # 60-second cooldown between requests
-    _check_rate_limit(phone)    # 5 requests per 10-minute window
+    # Canonicalize phone number for rate-limiting, storage, and binding
+    _check_otp_cooldown(clean_phone)  # 60-second cooldown between requests
+    _check_rate_limit(clean_phone)    # 5 requests per 10-minute window
 
     # Cryptographically secure 6-digit OTP
     otp = f"{secrets.randbelow(1000000):06d}"
-    _store_otp(phone, otp)
+    _store_otp(clean_phone, otp)
     # Do NOT reset failure counter on re-request (prevents brute-force cycling)
     # Output to logs in development only / hook SMS gateway in production
     if settings.ENV != "production":
-        print(f"[OTP SERVICE] Verification code for {phone}: {otp}")
+        print(f"[OTP SERVICE] Verification code for {clean_phone}: {otp}")
     return {"message": "OTP sent"}
 
 
 @router.post("/otp/verify")
 def verify_otp(payload: OTPVerifyRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    clean_phone = _normalize_phone(payload.phone) or ""
     now = time.time()
-    failure_entry = _local_otp_failures.get(payload.phone, {"count": 0, "first_at": now})
+    failure_entry = _local_otp_failures.get(clean_phone, {"count": 0, "first_at": now})
     total_failures = failure_entry.get("count", 0)
 
     # Global failure cap: 10 total attempts per phone across all OTP generations (15-min window)
     if total_failures >= 10:
-        _delete_stored_otp(payload.phone)
+        _delete_stored_otp(clean_phone)
         if now - failure_entry.get("first_at", 0) < 900:  # 15-minute lockout
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many failed verification attempts. This phone is temporarily locked. Please try again in 15 minutes.",
             )
         # Window expired — reset
-        _local_otp_failures.pop(payload.phone, None)
+        _local_otp_failures.pop(clean_phone, None)
         failure_entry = {"count": 0, "first_at": now}
 
-    expected = _get_stored_otp(payload.phone)
+    expected = _get_stored_otp(clean_phone)
     if expected is None or not secrets.compare_digest(expected, payload.otp):
         failure_entry["count"] = failure_entry.get("count", 0) + 1
         failure_entry.setdefault("first_at", now)
-        _local_otp_failures[payload.phone] = failure_entry
+        _local_otp_failures[clean_phone] = failure_entry
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
     # Verify ownership: only the requesting user can bind this phone
-    existing_user = db.query(User).filter(User.phone == payload.phone, User.id != user.id).first()
+    existing_user = db.query(User).filter(User.phone == clean_phone, User.id != user.id).first()
     if existing_user:
         raise HTTPException(
             status_code=400,
             detail="This phone number is already associated with another account.",
         )
 
-    _local_otp_failures.pop(payload.phone, None)
-    user.phone = payload.phone
+    _local_otp_failures.pop(clean_phone, None)
+    user.phone = clean_phone
     user.is_verified = True
     user.verification_method = "phone_otp"
     db.commit()
-    _delete_stored_otp(payload.phone)
+    _delete_stored_otp(clean_phone)
     return {"message": "Phone verified successfully"}
 
 
@@ -540,8 +557,19 @@ def delete_account(user: User = Depends(get_current_user), db: Session = Depends
 
 
 @router.post("/forgot-password")
-def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email.strip().lower()).first()
+def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    # Rate limit password resets: max 5 requests per 10 minutes per IP/client
+    from app.core.rate_limit import get_client_ip
+    client_ip = get_client_ip(request)
+    allowed, retry_after = check_rate_limit(f"forgot_pw:{client_ip}", 5, 600)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many password reset requests. Please try again in {retry_after} seconds.",
+        )
+
+    clean_email = payload.email.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == clean_email).first()
     # Anti-enumeration: return standard response even if email is not found
     if not user:
         return {"message": "If this email is registered, a password reset link has been dispatched."}
@@ -556,10 +584,10 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     reset_url = f"http://localhost:3000/login?reset_token={reset_token}"
     send_password_reset_email(user.email, user.full_name or "Student", reset_url)
 
-    # Security: Never return reset tokens in HTTP API responses on running servers.
-    # Output to server log only in development, or to automated test runner.
+    # Security: Never return reset tokens in HTTP API responses in production environments.
+    # Output to automated test runner in development/test only.
     response_data = {"message": "If this email is registered, a password reset link has been dispatched."}
-    if os.getenv("PYTEST_CURRENT_TEST"):
+    if settings.ENV != "production" and os.getenv("PYTEST_CURRENT_TEST"):
         response_data["dev_reset_token"] = reset_token
     return response_data
 

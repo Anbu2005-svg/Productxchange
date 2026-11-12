@@ -101,6 +101,17 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_db():
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(sa.text("""
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                endpoint TEXT NOT NULL UNIQUE,
+                p256dh TEXT,
+                auth TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
     yield
     Base.metadata.drop_all(bind=engine)
 
@@ -126,6 +137,10 @@ def clean_tables(db):
     yield
     for table in reversed(Base.metadata.sorted_tables):
         db.execute(table.delete())
+    try:
+        db.execute(sa.text("DELETE FROM push_subscriptions"))
+    except Exception:
+        pass
     db.commit()
     _local_rate_store.clear()
     _local_login_attempts.clear()

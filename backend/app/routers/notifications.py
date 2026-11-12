@@ -19,6 +19,22 @@ DISALLOWED_PUSH_HOSTS = {
     "localhost", "127.0.0.1", "::1", "0.0.0.0", "169.254.169.254", "metadata.google.internal"
 }
 
+ALLOWED_PUSH_DOMAINS = (
+    "fcm.googleapis.com",
+    "push.apple.com",
+    "push.services.mozilla.com",
+    "notify.windows.com",
+    "wns.windows.com",
+    "android.googleapis.com",
+)
+
+
+def _is_allowed_push_host(hostname: str) -> bool:
+    for allowed in ALLOWED_PUSH_DOMAINS:
+        if hostname == allowed or hostname.endswith("." + allowed):
+            return True
+    return False
+
 
 class PushSubscriptionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -48,6 +64,10 @@ def _validate_push_endpoint(endpoint: str):
 
         if hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
             raise HTTPException(status_code=400, detail="Private network endpoints are forbidden")
+
+        # Restrict strictly to recognized browser push service domains to prevent internal SSRF & DNS rebinding
+        if not _is_allowed_push_host(hostname):
+            raise HTTPException(status_code=400, detail="Push service gateway not recognized or untrusted")
     except HTTPException:
         raise
     except Exception:
@@ -191,8 +211,16 @@ def subscribe_push(
     _validate_push_endpoint(payload.endpoint)
 
     # Save to in-memory store for instantaneous push dispatch
+    # Remove endpoint from other users' lists if device was reassigned / relogged
+    for uid, sub_list in list(_push_subscriptions.items()):
+        if uid != user.id:
+            _push_subscriptions[uid] = [s for s in sub_list if s.get("endpoint") != payload.endpoint]
+
     subs = _push_subscriptions.setdefault(user.id, [])
-    if payload.endpoint not in [s.get("endpoint") for s in subs]:
+    existing_idx = next((i for i, s in enumerate(subs) if s.get("endpoint") == payload.endpoint), None)
+    if existing_idx is not None:
+        subs[existing_idx] = payload.model_dump()
+    else:
         subs.append(payload.model_dump())
 
     # Persist to database
@@ -203,6 +231,7 @@ def subscribe_push(
                     INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
                     VALUES (:user_id, :endpoint, :p256dh, :auth)
                     ON CONFLICT(endpoint) DO UPDATE SET
+                        user_id = excluded.user_id,
                         p256dh = excluded.p256dh,
                         auth = excluded.auth
                 """),
@@ -214,6 +243,7 @@ def subscribe_push(
                     INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
                     VALUES (:user_id, :endpoint, :p256dh, :auth)
                     ON CONFLICT(endpoint) DO UPDATE SET
+                        user_id = EXCLUDED.user_id,
                         p256dh = EXCLUDED.p256dh,
                         auth = EXCLUDED.auth
                 """),

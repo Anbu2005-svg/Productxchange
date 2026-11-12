@@ -51,48 +51,59 @@ def get_sustainability_metrics(
     - Personal eco-impact badge (if logged in)
     """
     # 1. Total active listings and completed transactions
-    total_listings = db.query(Product).count()
-    completed_txs = (
-        db.query(Transaction)
+    total_listings = db.query(func.count(Product.id)).scalar() or 0
+    completed_count = (
+        db.query(func.count(Transaction.id))
         .filter(Transaction.state == TransactionState.COMPLETED)
-        .all()
+        .scalar() or 0
     )
-
-    completed_count = len(completed_txs)
     circulated_count = max(completed_count, total_listings)  # Account for all circulating peer items
 
-    # 2. Fetch all products to aggregate category metrics
-    products = db.query(Product).all()
-    prod_map = {p.id: p for p in products}
+    # 2. Memory-Safe SQL Aggregations: O(1) heap memory, prevents Out-Of-Memory (OOM) algorithmic DoS
+    product_stats = (
+        db.query(
+            Product.category,
+            Product.status,
+            func.count(Product.id),
+            func.sum(func.coalesce(Product.price, 0.0)),
+        )
+        .group_by(Product.category, Product.status)
+        .all()
+    )
 
     total_co2_kg = 0.0
     total_waste_kg = 0.0
     total_rupees_saved = 0.0
     category_counts: dict[str, int] = {}
 
-    for p in products:
-        cat = p.category or "General"
-        category_counts[cat] = category_counts.get(cat, 0) + 1
-        factors = _get_factors(cat)
+    for cat, status, count, price_sum in product_stats:
+        cat_name = cat or "General"
+        category_counts[cat_name] = category_counts.get(cat_name, 0) + count
+        factors = _get_factors(cat_name)
 
         # Baseline savings: listing an item keeps it in circular economy
-        item_multiplier = 1.5 if p.status == ProductStatus.SOLD else 1.0
-        total_co2_kg += factors["co2_kg"] * item_multiplier
-        total_waste_kg += factors["waste_kg"] * item_multiplier
+        item_multiplier = 1.5 if status == ProductStatus.SOLD else 1.0
+        total_co2_kg += factors["co2_kg"] * item_multiplier * count
+        total_waste_kg += factors["waste_kg"] * item_multiplier * count
 
         # Savings = retail estimated price minus campus second-hand price
-        retail_est = factors["avg_new_price"]
-        actual_price = p.price if p.price is not None else 0.0
+        retail_est = factors["avg_new_price"] * count
+        actual_price = float(price_sum or 0.0)
         savings = max(0.0, retail_est - actual_price)
         total_rupees_saved += savings
 
-    # If completed transactions exist, incorporate agreed prices (O(1) memory lookup, no N+1 query)
-    for tx in completed_txs:
-        p = prod_map.get(tx.product_id)
-        if p:
-            factors = _get_factors(p.category)
-            total_co2_kg += factors["co2_kg"] * 0.5  # Additional bonus for confirmed deal
-            total_waste_kg += factors["waste_kg"] * 0.5
+    # If completed transactions exist, incorporate agreed prices via SQL group-by
+    completed_cat_counts = (
+        db.query(Product.category, func.count(Transaction.id))
+        .join(Product, Transaction.product_id == Product.id)
+        .filter(Transaction.state == TransactionState.COMPLETED)
+        .group_by(Product.category)
+        .all()
+    )
+    for cat, tx_count in completed_cat_counts:
+        factors = _get_factors(cat)
+        total_co2_kg += factors["co2_kg"] * 0.5 * tx_count
+        total_waste_kg += factors["waste_kg"] * 0.5 * tx_count
 
     # Trees equivalent: 1 mature tree absorbs ~21 kg CO2/year
     trees_equivalent = round(total_co2_kg / 21.0, 1)
@@ -100,31 +111,39 @@ def get_sustainability_metrics(
     # 3. User personal impact (if logged in)
     user_impact = None
     if user:
-        user_products = [p for p in products if p.seller_id == user.id]
-        user_txs = (
-            db.query(Transaction)
+        user_prod_stats = (
+            db.query(
+                Product.category,
+                func.count(Product.id),
+                func.sum(func.coalesce(Product.price, 0.0)),
+            )
+            .filter(Product.seller_id == user.id)
+            .group_by(Product.category)
+            .all()
+        )
+        user_co2 = 0.0
+        user_waste = 0.0
+        user_saved = 0.0
+        for cat, count, price_sum in user_prod_stats:
+            f = _get_factors(cat)
+            user_co2 += f["co2_kg"] * count
+            user_waste += f["waste_kg"] * count
+            user_saved += max(0.0, (f["avg_new_price"] * count) - float(price_sum or 0.0))
+
+        user_tx_stats = (
+            db.query(Product.category, func.count(Transaction.id))
+            .join(Product, Transaction.product_id == Product.id)
             .filter(
                 (Transaction.buyer_id == user.id) | (Transaction.seller_id == user.id),
                 Transaction.state == TransactionState.COMPLETED,
             )
+            .group_by(Product.category)
             .all()
         )
-
-        user_co2 = 0.0
-        user_waste = 0.0
-        user_saved = 0.0
-        for p in user_products:
-            f = _get_factors(p.category)
-            user_co2 += f["co2_kg"]
-            user_waste += f["waste_kg"]
-            user_saved += max(0.0, f["avg_new_price"] - (p.price or 0))
-
-        for tx in user_txs:
-            p = prod_map.get(tx.product_id)
-            if p:
-                f = _get_factors(p.category)
-                user_co2 += f["co2_kg"] * 0.5
-                user_waste += f["waste_kg"] * 0.5
+        for cat, count in user_tx_stats:
+            f = _get_factors(cat)
+            user_co2 += f["co2_kg"] * 0.5 * count
+            user_waste += f["waste_kg"] * 0.5 * count
 
         # Eco tier based on CO2 saved
         tier = "Green Pioneer 🌱"
@@ -141,8 +160,8 @@ def get_sustainability_metrics(
             "co2_saved_kg": round(user_co2, 1),
             "waste_diverted_kg": round(user_waste, 1),
             "rupees_saved": round(user_saved),
-            "items_shared": len(user_products),
-            "deals_completed": len(user_txs),
+            "items_shared": sum(s[1] for s in user_prod_stats),
+            "deals_completed": sum(s[1] for s in user_tx_stats),
         }
 
     return {

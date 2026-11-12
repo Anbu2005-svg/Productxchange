@@ -152,6 +152,9 @@ class TransactionService:
         if actor_id not in (tx.buyer_id, tx.seller_id):
             raise HTTPException(status_code=403, detail="Not a party to this transaction")
         tx.state = TransactionState.CONFIRMED
+        # Anti ghost-deal / double-booking: lock listing status to PENDING handover
+        if tx.product and tx.product.status == ProductStatus.ACTIVE:
+            tx.product.status = ProductStatus.PENDING
         notify_id = tx.buyer_id if actor_id == tx.seller_id else tx.seller_id
         create_notification(
             self.db, notify_id, "DEAL_CONFIRMED",
@@ -256,7 +259,18 @@ class TransactionService:
 
     def cancel(self, tx: Transaction, actor_id: int) -> Transaction:
         self._assert_transition(tx.state, TransactionState.CANCELLED)
+        if actor_id not in (tx.buyer_id, tx.seller_id):
+            raise HTTPException(status_code=403, detail="Not a party to this transaction")
         tx.state = TransactionState.CANCELLED
+        # Revert listing status back to ACTIVE if it was PENDING handover for this deal
+        if tx.product and tx.product.status == ProductStatus.PENDING:
+            other_confirmed = self.db.query(Transaction).filter(
+                Transaction.product_id == tx.product_id,
+                Transaction.id != tx.id,
+                Transaction.state == TransactionState.CONFIRMED,
+            ).first()
+            if not other_confirmed:
+                tx.product.status = ProductStatus.ACTIVE
         notify_id = tx.buyer_id if actor_id == tx.seller_id else tx.seller_id
         create_notification(
             self.db, notify_id, "DEAL_CANCELLED",

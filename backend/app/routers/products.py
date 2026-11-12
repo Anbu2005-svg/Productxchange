@@ -41,11 +41,16 @@ def _sanitize_product_out(
     distance_m: Optional[float] = None
 ) -> ProductOut:
     out = ProductOut.model_validate(product)
-    if distance_m is not None:
-        out.distance_m = float(distance_m)
 
     is_seller = current_user is not None and current_user.id == product.seller_id
     is_confirmed_buyer = current_user is not None and _is_deal_confirmed(product.id, current_user.id, db)
+
+    if distance_m is not None:
+        if is_seller or is_confirmed_buyer:
+            out.distance_m = float(distance_m)
+        else:
+            # Privacy Protection: Round distance to nearest 100 meters for strangers to prevent trilateration attacks
+            out.distance_m = float(round(distance_m / 100.0) * 100.0)
 
     if is_seller or is_confirmed_buyer:
         out.pickup_area = product.pickup_area
