@@ -98,6 +98,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/", label: "Nearby", icon: "📍" },
+    { href: "/saved", label: "Saved", icon: "❤️" },
     { href: "/deals", label: "Deals", icon: "🤝" },
     { href: "/chat", label: "Chat", icon: "💬", badge: unreadChatCount },
     { href: "/impact", label: "Eco-Impact", icon: "🌱" },

@@ -1,6 +1,6 @@
 import enum
 from sqlalchemy import (
-    Column, Integer, String, Float, DateTime, ForeignKey, func, Enum, ARRAY, Text, Boolean
+    Column, Integer, String, Float, DateTime, ForeignKey, func, Enum, ARRAY, Text, Boolean, UniqueConstraint
 )
 from sqlalchemy.types import UserDefinedType
 from sqlalchemy.orm import relationship
@@ -38,6 +38,7 @@ class TransactionType(str, enum.Enum):
 class ProductStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
     PENDING = "PENDING"
+    RENTED = "RENTED"
     SOLD = "SOLD"
     REMOVED = "REMOVED"
 
@@ -76,3 +77,18 @@ class Product(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     seller = relationship("User")
+
+
+class SavedProduct(Base):
+    __tablename__ = "saved_products"
+    __table_args__ = (
+        UniqueConstraint("user_id", "product_id", name="uq_user_saved_product"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    product = relationship("Product")
+    user = relationship("User")

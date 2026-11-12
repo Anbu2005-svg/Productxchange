@@ -1,6 +1,13 @@
 import os
 import math
+import warnings
 import pytest
+
+# Suppress legacy third-party library deprecation warnings on Python 3.12 (jose / starlette testclient)
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*datetime.datetime.utcnow().*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="jose.*")
+warnings.filterwarnings("ignore", message=".*Using `httpx` with `starlette.testclient` is deprecated.*")
+
 from fastapi.testclient import TestClient
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker, declarative_base

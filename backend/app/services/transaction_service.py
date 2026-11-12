@@ -149,6 +149,8 @@ class TransactionService:
 
     def confirm(self, tx: Transaction, actor_id: int) -> Transaction:
         self._assert_transition(tx.state, TransactionState.CONFIRMED)
+        if actor_id not in (tx.buyer_id, tx.seller_id):
+            raise HTTPException(status_code=403, detail="Not a party to this transaction")
         tx.state = TransactionState.CONFIRMED
         notify_id = tx.buyer_id if actor_id == tx.seller_id else tx.seller_id
         create_notification(
@@ -184,7 +186,15 @@ class TransactionService:
             self._assert_transition(tx.state, TransactionState.COMPLETED)
             tx.state = TransactionState.COMPLETED
             if tx.product:
-                tx.product.status = ProductStatus.SOLD
+                is_rent = str(getattr(tx.product, "transaction_type", "")).upper() in ("RENT", "TRANSACTIONTYPE.RENT")
+                if is_rent:
+                    tx.product.status = ProductStatus.RENTED
+                    from datetime import datetime, timezone, timedelta
+                    period_days = tx.rental_period_days or 30
+                    tx.rental_due_date = datetime.now(timezone.utc) + timedelta(days=period_days)
+                    tx.rental_returned = False
+                else:
+                    tx.product.status = ProductStatus.SOLD
             # Notify both parties
             create_notification(
                 self.db, tx.buyer_id, "DEAL_COMPLETED",
@@ -199,6 +209,47 @@ class TransactionService:
                 "/deals"
             )
 
+        self.db.commit()
+        self.db.refresh(tx)
+        return tx
+
+    def return_rental_item(self, tx: Transaction, actor_id: int) -> Transaction:
+        """
+        Completes the physical return of a rented campus item.
+        Restores listing to ACTIVE in the circular campus marketplace.
+        """
+        if actor_id not in (tx.buyer_id, tx.seller_id):
+            raise HTTPException(status_code=403, detail="Not a party to this transaction")
+        if tx.state != TransactionState.COMPLETED:
+            raise HTTPException(status_code=400, detail="Transaction must be completed before returning item")
+        if not tx.product or str(getattr(tx.product, "transaction_type", "")).upper() not in ("RENT", "TRANSACTIONTYPE.RENT"):
+            raise HTTPException(status_code=400, detail="Only rental transactions can be returned")
+        if tx.rental_returned:
+            raise HTTPException(status_code=400, detail="Rental item has already been marked returned")
+
+        from datetime import datetime, timezone
+        tx.rental_returned = True
+        tx.rental_return_date = datetime.now(timezone.utc)
+        tx.product.status = ProductStatus.ACTIVE
+
+        # Notify both parties
+        create_notification(
+            self.db, tx.buyer_id, "RENTAL_RETURNED",
+            "Rental Item Returned 🔄",
+            f"The rental item '{tx.product.title}' has been returned and re-listed on campus.",
+            "/deals"
+        )
+        create_notification(
+            self.db, tx.seller_id, "RENTAL_RETURNED",
+            "Rental Item Returned 🔄",
+            f"Your item '{tx.product.title}' has been safely returned and is active for other students.",
+            "/deals"
+        )
+        self._send_notification_email(
+            tx.seller_id,
+            "Rental Item Returned 🔄",
+            f"Your rental item '{tx.product.title}' has been safely returned and restored to active campus discovery."
+        )
         self.db.commit()
         self.db.refresh(tx)
         return tx

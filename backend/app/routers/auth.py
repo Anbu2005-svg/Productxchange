@@ -432,12 +432,6 @@ def upload_avatar(file: UploadFile = File(...), user: User = Depends(get_current
             if resp.status_code not in (200, 201):
                 raise HTTPException(status_code=500, detail=f"Failed to upload avatar to Supabase Storage: {resp.text}")
         url = f"{base_url}/storage/v1/object/public/{settings.SUPABASE_BUCKET}/{key}"
-    elif settings.STORAGE_BACKEND == "s3" and settings.S3_BUCKET:
-        import io
-        import boto3
-        s3 = boto3.client("s3", region_name=settings.AWS_REGION)
-        s3.upload_fileobj(io.BytesIO(content), settings.S3_BUCKET, key, ExtraArgs={"ContentType": file.content_type or "image/jpeg"})
-        url = f"https://{settings.S3_BUCKET}.s3.{settings.AWS_REGION}.amazonaws.com/{key}"
     else:
         os.makedirs(settings.LOCAL_STORAGE_DIR, exist_ok=True)
         file_path = os.path.join(settings.LOCAL_STORAGE_DIR, key)

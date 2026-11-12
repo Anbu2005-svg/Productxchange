@@ -1,5 +1,5 @@
 import os
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 DEFAULT_SQLITE_PATH = os.path.join(BACKEND_DIR, "productxchange.db").replace("\\", "/")
@@ -22,13 +22,11 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
-    # Storage
-    STORAGE_BACKEND: str = "local"  # "local", "s3", or "supabase"
+    # Storage (Standardized exclusively on Supabase BaaS Cloud Storage with Local Fallback)
+    STORAGE_BACKEND: str = "supabase"  # "supabase" or "local"
     LOCAL_STORAGE_DIR: str = os.path.join(BACKEND_DIR, "uploads")
-    S3_BUCKET: str = ""
-    AWS_REGION: str = "ap-south-1"
 
-    # Supabase BaaS Integration (Free Tier)
+    # Supabase BaaS Integration (Primary Cloud Storage & Database)
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
     SUPABASE_BUCKET: str = "products"
@@ -37,11 +35,17 @@ class Settings(BaseSettings):
     DEFAULT_SEARCH_RADIUS_KM: int = 10
     MAX_SEARCH_RADIUS_KM: int = 100
 
-    class Config:
-        env_file = (os.path.join(BACKEND_DIR, ".env"), ".env")
+    model_config = SettingsConfigDict(
+        env_file=(os.path.join(BACKEND_DIR, ".env"), ".env"),
+        extra="ignore"
+    )
 
 
 settings = Settings()
+
+# Seamless fallback to local storage if Supabase credentials are not configured in local development
+if settings.STORAGE_BACKEND == "supabase" and not (settings.SUPABASE_URL and settings.SUPABASE_KEY):
+    settings.STORAGE_BACKEND = "local"
 
 # Security check: fail-fast if default JWT secret is used in production
 if settings.ENV == "production" and (settings.JWT_SECRET in ("CHANGE_ME_IN_PRODUCTION", "anbu-productxchange-secret-key-2026") or len(settings.JWT_SECRET) < 32):

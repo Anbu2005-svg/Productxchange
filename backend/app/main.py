@@ -89,14 +89,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS if settings.ENV == "development" else [o for o in settings.CORS_ORIGINS if "localhost" not in o],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With", "X-Request-ID"],
     expose_headers=["X-Total-Count", "X-Request-ID"],
 )
 
 
 # 4. Secure Static Files Handler (disallows script execution and non-image extensions)
-ALLOWED_STATIC_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_STATIC_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".glb", ".gltf"}
 
 class SecureStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):

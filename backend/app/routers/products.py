@@ -89,6 +89,16 @@ def _sanitize_product_out(
         out.is_expired = False
         out.can_bump = is_seller
 
+    # Check if saved to watchlist by current student
+    if current_user:
+        from app.models.product import SavedProduct
+        out.is_saved = db.query(SavedProduct.id).filter(
+            SavedProduct.user_id == current_user.id,
+            SavedProduct.product_id == product.id
+        ).first() is not None
+    else:
+        out.is_saved = False
+
     return out
 
 
@@ -376,10 +386,37 @@ def _is_safe_image_url(url: str) -> bool:
         # Supabase Storage URLs (e.g. https://<project>.supabase.co/storage/v1/object/public/<bucket>/...)
         if ".supabase.co/storage/v1/object/public/" in u or (settings.SUPABASE_URL and u.startswith(f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/public/")):
             return bool(re.search(r"\.(jpg|jpeg|png|webp)(\?.*)?$", u, re.IGNORECASE))
-        if settings.STORAGE_BACKEND == "s3" and settings.S3_BUCKET:
-            expected = f"https://{settings.S3_BUCKET}.s3.{settings.AWS_REGION}.amazonaws.com/"
-            return u.startswith(expected)
     return False
+
+
+def _delete_storage_file(u: str):
+    """Deletes uploaded media file from local storage or Supabase Storage."""
+    if not u or not isinstance(u, str):
+        return
+    if u.startswith("/uploads/"):
+        fname = os.path.basename(u)
+        fpath = os.path.join(settings.LOCAL_STORAGE_DIR, fname)
+        if os.path.isfile(fpath):
+            try:
+                os.remove(fpath)
+            except Exception:
+                pass
+    elif settings.STORAGE_BACKEND == "supabase" and settings.SUPABASE_URL and settings.SUPABASE_KEY:
+        try:
+            base_url = settings.SUPABASE_URL.rstrip("/")
+            public_prefix = f"{base_url}/storage/v1/object/public/{settings.SUPABASE_BUCKET}/"
+            if u.startswith(public_prefix):
+                key = u[len(public_prefix):]
+                del_url = f"{base_url}/storage/v1/object/{settings.SUPABASE_BUCKET}/{key}"
+                headers = {
+                    "Authorization": f"Bearer {settings.SUPABASE_KEY}",
+                    "apikey": settings.SUPABASE_KEY,
+                }
+                import httpx
+                with httpx.Client(timeout=10.0) as client:
+                    client.delete(del_url, headers=headers)
+        except Exception:
+            pass
 
 
 def _validate_image_bytes(data: bytes, ext: str) -> bool:
@@ -392,6 +429,51 @@ def _validate_image_bytes(data: bytes, ext: str) -> bool:
     if ext == ".webp" and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
         return True
     return False
+
+
+@router.get("/saved", response_model=List[ProductOut])
+def get_saved_products(
+    response: Response,
+    skip: int = 0,
+    limit: int = 50,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Returns all active listings saved to the current student's personal watchlist."""
+    from app.models.product import SavedProduct
+    safe_skip = max(0, skip)
+    safe_limit = min(max(1, limit), 100)
+
+    saved_entries = (
+        db.query(SavedProduct)
+        .filter(SavedProduct.user_id == user.id)
+        .order_by(SavedProduct.created_at.desc())
+        .offset(safe_skip)
+        .limit(safe_limit)
+        .all()
+    )
+    product_ids = [s.product_id for s in saved_entries]
+    if not product_ids:
+        response.headers["X-Total-Count"] = "0"
+        return []
+
+    products = (
+        db.query(Product)
+        .filter(Product.id.in_(product_ids), Product.status != ProductStatus.REMOVED)
+        .all()
+    )
+    prod_map = {p.id: p for p in products}
+
+    results = []
+    for pid in product_ids:
+        p = prod_map.get(pid)
+        if p:
+            out = _sanitize_product_out(p, user, db)
+            out.is_saved = True
+            results.append(out)
+
+    response.headers["X-Total-Count"] = str(len(results))
+    return results
 
 
 @router.get("/{product_id}", response_model=ProductOut)
@@ -495,24 +577,53 @@ def delete_product(product_id: int, user: User = Depends(get_current_user), db: 
 
     product.status = ProductStatus.REMOVED
 
-    # Clean up local storage image files associated with this listing
-    if settings.STORAGE_BACKEND == "local" and product.image_urls:
+    # Clean up storage image files (local or Supabase) associated with this listing
+    if product.image_urls:
         try:
             urls = product.image_urls if isinstance(product.image_urls, list) else json.loads(product.image_urls)
             for u in urls:
-                if isinstance(u, str) and u.startswith("/uploads/"):
-                    fname = os.path.basename(u)
-                    fpath = os.path.join(settings.LOCAL_STORAGE_DIR, fname)
-                    if os.path.isfile(fpath):
-                        try:
-                            os.remove(fpath)
-                        except Exception:
-                            pass
+                _delete_storage_file(u)
         except Exception:
             pass
 
     db.commit()
     return {"message": "Listing removed"}
+
+
+@router.post("/{product_id}/save")
+def save_product(product_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Saves a listing to the student's personal wishlist / watchlist."""
+    from app.models.product import SavedProduct
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    if product.status == ProductStatus.REMOVED:
+        raise HTTPException(status_code=400, detail="Cannot save a removed listing")
+
+    existing = db.query(SavedProduct).filter(
+        SavedProduct.user_id == user.id,
+        SavedProduct.product_id == product.id
+    ).first()
+    if not existing:
+        db.add(SavedProduct(user_id=user.id, product_id=product.id))
+        db.commit()
+
+    return {"saved": True, "product_id": product.id, "message": "Saved to your campus watchlist"}
+
+
+@router.delete("/{product_id}/save")
+def unsave_product(product_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Removes a listing from the student's personal wishlist / watchlist."""
+    from app.models.product import SavedProduct
+    saved = db.query(SavedProduct).filter(
+        SavedProduct.user_id == user.id,
+        SavedProduct.product_id == product_id
+    ).first()
+    if saved:
+        db.delete(saved)
+        db.commit()
+
+    return {"saved": False, "product_id": product_id, "message": "Removed from your campus watchlist"}
 
 
 @router.post("/{product_id}/bump", response_model=ProductOut)
@@ -607,12 +718,6 @@ def upload_image(
             if resp.status_code not in (200, 201):
                 raise HTTPException(status_code=500, detail=f"Failed to upload image to Supabase Storage: {resp.text}")
         url = f"{base_url}/storage/v1/object/public/{settings.SUPABASE_BUCKET}/{key}"
-    elif settings.STORAGE_BACKEND == "s3":
-        import io
-        import boto3
-        s3 = boto3.client("s3", region_name=settings.AWS_REGION)
-        s3.upload_fileobj(io.BytesIO(content), settings.S3_BUCKET, key, ExtraArgs={"ContentType": file.content_type or "image/jpeg"})
-        url = f"https://{settings.S3_BUCKET}.s3.{settings.AWS_REGION}.amazonaws.com/{key}"
     else:
         os.makedirs(settings.LOCAL_STORAGE_DIR, exist_ok=True)
         path = os.path.join(settings.LOCAL_STORAGE_DIR, key)

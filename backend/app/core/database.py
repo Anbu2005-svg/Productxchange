@@ -139,6 +139,27 @@ def ensure_schema_migrations():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """))
+
+                # Auto-migrate rental fields on transactions
+                tx_result = conn.execute(text("PRAGMA table_info(transactions)")).fetchall()
+                tx_cols = [r[1] for r in tx_result]
+                if "rental_returned" not in tx_cols and len(tx_cols) > 0:
+                    conn.execute(text("ALTER TABLE transactions ADD COLUMN rental_returned BOOLEAN DEFAULT 0"))
+                if "rental_return_date" not in tx_cols and len(tx_cols) > 0:
+                    conn.execute(text("ALTER TABLE transactions ADD COLUMN rental_return_date TIMESTAMP"))
+                if "rental_due_date" not in tx_cols and len(tx_cols) > 0:
+                    conn.execute(text("ALTER TABLE transactions ADD COLUMN rental_due_date TIMESTAMP"))
+
+                # Auto-create saved_products wishlist table
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS saved_products (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        product_id INTEGER NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(user_id, product_id)
+                    )
+                """))
                 conn.commit()
             else:
                 conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR;"))
@@ -152,6 +173,18 @@ def ensure_schema_migrations():
                         p256dh TEXT,
                         auth TEXT,
                         created_at TIMESTAMPTZ DEFAULT NOW()
+                    );
+                """))
+                conn.execute(text("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rental_returned BOOLEAN DEFAULT FALSE;"))
+                conn.execute(text("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rental_return_date TIMESTAMPTZ;"))
+                conn.execute(text("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rental_due_date TIMESTAMPTZ;"))
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS saved_products (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        UNIQUE(user_id, product_id)
                     );
                 """))
                 conn.commit()

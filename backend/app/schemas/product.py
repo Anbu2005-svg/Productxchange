@@ -107,6 +107,7 @@ class ProductOut(BaseModel):
     is_expired: bool = False
     days_remaining: int = 30
     can_bump: bool = False
+    is_saved: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

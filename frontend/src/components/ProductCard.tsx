@@ -2,7 +2,7 @@
 
 import { useState, useRef, MouseEvent } from "react";
 import Link from "next/link";
-import { Product, resolveImageUrl, getCategoryEmoji, getCategoryFallbackImage } from "@/lib/api";
+import { Product, resolveImageUrl, getCategoryEmoji, getCategoryFallbackImage, saveProduct, unsaveProduct, getToken } from "@/lib/api";
 
 function formatDistance(m?: number | null) {
   if (m == null) return null;
@@ -46,6 +46,28 @@ export default function ProductCard({ product }: { product: Product }) {
 
   const [imgIndex, setImgIndex] = useState(0);
   const [useHtmlFallback, setUseHtmlFallback] = useState(images.length === 0);
+  const [isSaved, setIsSaved] = useState(!!product.is_saved);
+
+  async function handleToggleSave(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const token = getToken();
+    if (!token) {
+      window.location.href = `/login?redirect=/listings/${product.id}`;
+      return;
+    }
+    const next = !isSaved;
+    setIsSaved(next);
+    try {
+      if (next) {
+        await saveProduct(product.id);
+      } else {
+        await unsaveProduct(product.id);
+      }
+    } catch {
+      setIsSaved(!next);
+    }
+  }
 
   const currentImageSrc = images.length > imgIndex ? resolveImageUrl(images[imgIndex]) : null;
 
@@ -235,21 +257,40 @@ export default function ProductCard({ product }: { product: Product }) {
             <span>🧊</span> {is3DMode ? "Exit 3D" : "3D View"}
           </button>
 
+          {/* Heart / Wishlist Save Button */}
+          <button
+            type="button"
+            onClick={handleToggleSave}
+            className={`absolute top-2.5 right-2.5 z-20 w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-md transition-all shadow-md active:scale-90 ${
+              isSaved
+                ? "bg-rose-500/90 text-white shadow-rose-500/30"
+                : "bg-black/40 hover:bg-black/60 text-white border border-white/20"
+            }`}
+            title={isSaved ? "Saved to your campus watchlist" : "Save to watchlist"}
+          >
+            <span className="text-xs leading-none">{isSaved ? "❤️" : "🤍"}</span>
+          </button>
+
           {/* Distance Pill Top Right */}
-          {distance && !isCompleted && (
-            <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-semibold tracking-wide bg-black/60 backdrop-blur-md text-amber-300 border border-amber-300/20 shadow-sm flex items-center gap-1">
+          {distance && !isCompleted && product.status !== "RENTED" && (
+            <span className="absolute top-2.5 right-11 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-black/60 backdrop-blur-md text-amber-300 border border-amber-300/20 shadow-sm flex items-center gap-1">
               <span>📍</span> {distance}
             </span>
           )}
 
           {/* Status Badges */}
+          {product.status === "RENTED" && (
+            <span className="absolute top-2.5 right-11 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-600/90 text-white border border-white/20 shadow-sm flex items-center gap-0.5">
+              <span>⏱️</span> Rented Out
+            </span>
+          )}
           {isCompleted && (
-            <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-stone-900/90 text-white border border-white/20 shadow-sm">
+            <span className="absolute top-2.5 right-11 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-stone-900/90 text-white border border-white/20 shadow-sm">
               ✓ Handed Over
             </span>
           )}
-          {!isCompleted && product.is_expired && !distance && (
-            <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-600/90 text-white shadow-sm">
+          {!isCompleted && product.status !== "RENTED" && product.is_expired && !distance && (
+            <span className="absolute top-2.5 right-11 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-600/90 text-white shadow-sm">
               Expired
             </span>
           )}

@@ -149,9 +149,25 @@ def act_on_transaction(tx_id: int, payload: TransactionAction, user: User = Depe
         return _tx_to_out(svc.confirm(tx, user.id), user)
     if action == "complete":
         return _tx_to_out(svc.complete(tx, user.id), user)
+    if action == "return":
+        return _tx_to_out(svc.return_rental_item(tx, user.id), user)
     if action == "cancel":
         return _tx_to_out(svc.cancel(tx, user.id), user)
     raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+
+
+@router.post("/{tx_id}/return", response_model=TransactionOut)
+def return_rental(
+    tx_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Marks a completed rental item as safely returned, restoring it to ACTIVE on campus."""
+    tx = _get_tx_or_404(tx_id, db, for_update=True)
+    _assert_party(tx, user)
+    svc = TransactionService(db)
+    returned_tx = svc.return_rental_item(tx, user.id)
+    return _tx_to_out(returned_tx, user)
 
 
 @router.post("/{tx_id}/verify-handshake", response_model=TransactionOut)

@@ -2,6 +2,7 @@ from typing import Optional, Any
 import csv
 import io
 from fastapi import APIRouter, Depends, HTTPException, Response, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
@@ -151,78 +152,102 @@ def _sanitize_csv_cell(val: Any) -> str:
 
 @router.get("/export/{resource}")
 def export_data(resource: str, db: Session = Depends(get_db)):
-    """Export tabular datasets to CSV for moderation and admin analysis."""
-    output = io.StringIO()
-    writer = csv.writer(output)
-
-    if resource == "users":
-        writer.writerow(["ID", "Email", "Full Name", "College", "Verified", "Admin", "Suspended", "Rating", "Joined At"])
-        users = db.query(User).order_by(User.id.asc()).all()
-        for u in users:
-            writer.writerow([
-                _sanitize_csv_cell(u.id),
-                _sanitize_csv_cell(u.email),
-                _sanitize_csv_cell(u.full_name or ""),
-                _sanitize_csv_cell(u.college or ""),
-                _sanitize_csv_cell(u.is_verified),
-                _sanitize_csv_cell(u.is_admin),
-                _sanitize_csv_cell(u.is_blocked_flag),
-                _sanitize_csv_cell(u.avg_rating),
-                _sanitize_csv_cell(str(u.created_at)),
-            ])
-
-    elif resource == "products":
-        writer.writerow(["ID", "Seller ID", "Title", "Category", "Type", "Price", "Condition", "Status", "Created At"])
-        products = db.query(Product).order_by(Product.id.asc()).all()
-        for p in products:
-            writer.writerow([
-                _sanitize_csv_cell(p.id),
-                _sanitize_csv_cell(p.seller_id),
-                _sanitize_csv_cell(p.title),
-                _sanitize_csv_cell(p.category),
-                _sanitize_csv_cell(p.transaction_type.value if hasattr(p.transaction_type, "value") else str(p.transaction_type)),
-                _sanitize_csv_cell(p.price or 0),
-                _sanitize_csv_cell(p.condition or ""),
-                _sanitize_csv_cell(p.status.value if hasattr(p.status, "value") else str(p.status)),
-                _sanitize_csv_cell(str(p.created_at)),
-            ])
-
-    elif resource == "transactions":
-        writer.writerow(["ID", "Product ID", "Buyer ID", "Seller ID", "State", "Agreed Price", "Created At", "Updated At"])
-        txs = db.query(Transaction).order_by(Transaction.id.asc()).all()
-        for t in txs:
-            writer.writerow([
-                _sanitize_csv_cell(t.id),
-                _sanitize_csv_cell(t.product_id),
-                _sanitize_csv_cell(t.buyer_id),
-                _sanitize_csv_cell(t.seller_id),
-                _sanitize_csv_cell(t.state.value if hasattr(t.state, "value") else str(t.state)),
-                _sanitize_csv_cell(t.agreed_price or ""),
-                _sanitize_csv_cell(str(t.created_at)),
-                _sanitize_csv_cell(str(t.updated_at)),
-            ])
-
-    elif resource == "reports":
-        writer.writerow(["ID", "Reporter ID", "Reported User ID", "Reported Product ID", "Reason", "Details", "Resolved", "Created At"])
-        reports = db.query(Report).order_by(Report.id.asc()).all()
-        for r in reports:
-            writer.writerow([
-                _sanitize_csv_cell(r.id),
-                _sanitize_csv_cell(r.reporter_id),
-                _sanitize_csv_cell(r.reported_user_id or ""),
-                _sanitize_csv_cell(r.reported_product_id or ""),
-                _sanitize_csv_cell(r.reason),
-                _sanitize_csv_cell(r.details or ""),
-                _sanitize_csv_cell(r.resolved),
-                _sanitize_csv_cell(str(r.created_at)),
-            ])
-
-    else:
+    """Export tabular datasets to streaming CSV to eliminate memory exhaustion / OOM risks."""
+    if resource not in ("users", "products", "transactions", "reports"):
         raise HTTPException(status_code=400, detail="Invalid resource. Choose from: users, products, transactions, reports")
 
-    csv_data = output.getvalue()
-    return Response(
-        content=csv_data,
+    def csv_generator():
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        if resource == "users":
+            writer.writerow(["ID", "Email", "Full Name", "College", "Verified", "Admin", "Suspended", "Rating", "Joined At"])
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+            for u in db.query(User).order_by(User.id.asc()).yield_per(100):
+                writer.writerow([
+                    _sanitize_csv_cell(u.id),
+                    _sanitize_csv_cell(u.email),
+                    _sanitize_csv_cell(u.full_name or ""),
+                    _sanitize_csv_cell(u.college or ""),
+                    _sanitize_csv_cell(u.is_verified),
+                    _sanitize_csv_cell(u.is_admin),
+                    _sanitize_csv_cell(u.is_blocked_flag),
+                    _sanitize_csv_cell(u.avg_rating),
+                    _sanitize_csv_cell(str(u.created_at)),
+                ])
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
+        elif resource == "products":
+            writer.writerow(["ID", "Seller ID", "Title", "Category", "Type", "Price", "Condition", "Status", "Created At"])
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+            for p in db.query(Product).order_by(Product.id.asc()).yield_per(100):
+                writer.writerow([
+                    _sanitize_csv_cell(p.id),
+                    _sanitize_csv_cell(p.seller_id),
+                    _sanitize_csv_cell(p.title),
+                    _sanitize_csv_cell(p.category),
+                    _sanitize_csv_cell(p.transaction_type.value if hasattr(p.transaction_type, "value") else str(p.transaction_type)),
+                    _sanitize_csv_cell(p.price or 0),
+                    _sanitize_csv_cell(p.condition or ""),
+                    _sanitize_csv_cell(p.status.value if hasattr(p.status, "value") else str(p.status)),
+                    _sanitize_csv_cell(str(p.created_at)),
+                ])
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
+        elif resource == "transactions":
+            writer.writerow(["ID", "Product ID", "Buyer ID", "Seller ID", "State", "Agreed Price", "Created At", "Updated At"])
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+            for t in db.query(Transaction).order_by(Transaction.id.asc()).yield_per(100):
+                writer.writerow([
+                    _sanitize_csv_cell(t.id),
+                    _sanitize_csv_cell(t.product_id),
+                    _sanitize_csv_cell(t.buyer_id),
+                    _sanitize_csv_cell(t.seller_id),
+                    _sanitize_csv_cell(t.state.value if hasattr(t.state, "value") else str(t.state)),
+                    _sanitize_csv_cell(t.agreed_price or ""),
+                    _sanitize_csv_cell(str(t.created_at)),
+                    _sanitize_csv_cell(str(t.updated_at)),
+                ])
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
+        elif resource == "reports":
+            writer.writerow(["ID", "Reporter ID", "Reported User ID", "Reported Product ID", "Reason", "Details", "Resolved", "Created At"])
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+            for r in db.query(Report).order_by(Report.id.asc()).yield_per(100):
+                writer.writerow([
+                    _sanitize_csv_cell(r.id),
+                    _sanitize_csv_cell(r.reporter_id),
+                    _sanitize_csv_cell(r.reported_user_id or ""),
+                    _sanitize_csv_cell(r.reported_product_id or ""),
+                    _sanitize_csv_cell(r.reason),
+                    _sanitize_csv_cell(r.details or ""),
+                    _sanitize_csv_cell(r.resolved),
+                    _sanitize_csv_cell(str(r.created_at)),
+                ])
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
+    return StreamingResponse(
+        csv_generator(),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=productxchange_{resource}.csv"},
     )

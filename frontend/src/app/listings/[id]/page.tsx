@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { api, Product, resolveImageUrl, User, reportListing } from "@/lib/api";
+import { api, Product, resolveImageUrl, User, reportListing, saveProduct, unsaveProduct } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 
 const CampusMap = dynamic(() => import("@/components/CampusMap"), {
@@ -46,6 +46,33 @@ export default function ListingDetailPage() {
   const [submittingReport, setSubmittingReport] = useState(false);
   const [similarProducts, setSimilarProducts] = useState<Product[]>([]);
   const [activeMediaTab, setActiveMediaTab] = useState<"2d" | "3d">("3d");
+  const [isSaved, setIsSaved] = useState(false);
+
+  useEffect(() => {
+    if (product) {
+      setIsSaved(!!product.is_saved);
+    }
+  }, [product]);
+
+  async function handleToggleSave() {
+    if (!currentUser) {
+      router.push(`/login?redirect=/listings/${id}`);
+      return;
+    }
+    const next = !isSaved;
+    setIsSaved(next);
+    try {
+      if (next) {
+        await saveProduct(Number(id));
+        showToast("Saved to your watchlist! ❤️", "success");
+      } else {
+        await unsaveProduct(Number(id));
+        showToast("Removed from your watchlist", "info");
+      }
+    } catch {
+      setIsSaved(!next);
+    }
+  }
 
   useEffect(() => {
     api("/auth/me").then(setCurrentUser).catch(() => setCurrentUser(null));
@@ -78,6 +105,11 @@ export default function ListingDetailPage() {
 
   async function sendOffer() {
     if (!product) return;
+    if (!currentUser) {
+      showToast("Please sign in to make an offer or coordinate meetup", "info");
+      router.push(`/login?redirect=/listings/${id}`);
+      return;
+    }
     setError(null);
     setSubmittingOffer(true);
     try {
@@ -120,6 +152,11 @@ export default function ListingDetailPage() {
 
   async function handleMessageSeller() {
     if (!product) return;
+    if (!currentUser) {
+      showToast("Please sign in to message this seller", "info");
+      router.push(`/login?redirect=/listings/${id}`);
+      return;
+    }
     setStartingChat(true);
     try {
       const res = await api(`/chat/conversations/start?other_user_id=${product.seller_id}&product_id=${product.id}`, {
@@ -225,6 +262,19 @@ export default function ListingDetailPage() {
 
         {/* Action Buttons: Edit, Report, Share */}
         <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Save / Wishlist Button */}
+          <button
+            onClick={handleToggleSave}
+            className={`text-xs font-semibold px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-all ${
+              isSaved
+                ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800"
+                : "bg-sand dark:bg-stone-800 text-ink/70 dark:text-stone-300 border-ink/15 dark:border-stone-700 hover:bg-white dark:hover:bg-stone-700"
+            }`}
+            title={isSaved ? "Saved to watchlist" : "Save to watchlist"}
+          >
+            <span>{isSaved ? "❤️" : "🤍"}</span> {isSaved ? "Saved" : "Save"}
+          </button>
+
           {isSeller ? (
             <Link
               href={`/listings/edit/${product.id}`}

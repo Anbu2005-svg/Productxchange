@@ -257,6 +257,7 @@ export type Product = {
   days_remaining?: number;
   is_expired?: boolean;
   can_bump?: boolean;
+  is_saved?: boolean;
 };
 
 export type Offer = {
@@ -277,6 +278,9 @@ export type Transaction = {
   rental_period_days?: number | null;
   buyer_completed: boolean;
   seller_completed: boolean;
+  rental_returned?: boolean;
+  rental_return_date?: string | null;
+  rental_due_date?: string | null;
   handshake_pin?: string | null;
   created_at: string;
   updated_at: string;
@@ -397,4 +401,20 @@ export async function compressImage(
     reader.onerror = () => resolve(file);
     reader.readAsDataURL(file);
   });
+}
+
+export async function saveProduct(productId: number): Promise<{ saved: boolean; message: string }> {
+  return api(`/products/${productId}/save`, { method: "POST" });
+}
+
+export async function unsaveProduct(productId: number): Promise<{ saved: boolean; message: string }> {
+  return api(`/products/${productId}/save`, { method: "DELETE" });
+}
+
+export async function getSavedProducts(): Promise<Product[]> {
+  return api("/products/saved");
+}
+
+export async function returnRentalItem(transactionId: number): Promise<Transaction> {
+  return api(`/transactions/${transactionId}/return`, { method: "POST" });
 }

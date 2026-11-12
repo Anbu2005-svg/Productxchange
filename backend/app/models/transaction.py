@@ -42,6 +42,11 @@ class Transaction(Base):
     buyer_completed = Column(Boolean, default=False, nullable=False)
     seller_completed = Column(Boolean, default=False, nullable=False)
 
+    # Rental lifecycle tracking
+    rental_returned = Column(Boolean, default=False, nullable=False)
+    rental_return_date = Column(DateTime(timezone=True), nullable=True)
+    rental_due_date = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -102,6 +102,9 @@ class TransactionOut(BaseModel):
     rental_period_days: Optional[int]
     buyer_completed: bool = False
     seller_completed: bool = False
+    rental_returned: bool = False
+    rental_return_date: Optional[datetime] = None
+    rental_due_date: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     product: Optional[BriefProduct] = None

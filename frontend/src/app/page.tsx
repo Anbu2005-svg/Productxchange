@@ -82,11 +82,7 @@ export default function HomePage() {
   // Request browser geolocation on mount and listen to campus preference
   useEffect(() => {
     const token = getToken();
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-    setIsLoggedIn(true);
+    setIsLoggedIn(!!token);
 
     const savedCampus = typeof window !== "undefined" ? localStorage.getItem("px_campus") || localStorage.getItem("preferred_campus") || "" : "";
     setSelectedCampus(savedCampus);
@@ -261,22 +257,28 @@ export default function HomePage() {
     has3DOnly ||
     selectedCampus !== "";
 
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-4 text-center px-4 animate-fade-in">
-        <div className="w-10 h-10 rounded-full border-3 border-moss border-t-transparent animate-spin" />
-        <div className="space-y-1">
-          <h3 className="font-bold text-base text-ink dark:text-white">ProductXchange Campus Portal</h3>
-          <p className="text-xs text-ink/60 dark:text-stone-400">
-            Authentication required. Redirecting to login…
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="py-2">
+      {/* Guest Welcome Banner */}
+      {!isLoggedIn && (
+        <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-transparent border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🎓</span>
+            <div>
+              <h4 className="text-sm font-bold text-ink dark:text-white">ProductXchange Campus Marketplace</h4>
+              <p className="text-xs text-ink/60 dark:text-stone-400">Discover peer items, textbooks, and dorm essentials nearby. Sign in to chat or make offers.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href="/login" className="px-3.5 py-1.5 rounded-xl bg-moss text-white text-xs font-semibold hover:bg-moss/90 transition-colors shadow-xs">
+              Sign in
+            </Link>
+            <Link href="/register" className="px-3.5 py-1.5 rounded-xl border border-ink/15 dark:border-stone-700 bg-white dark:bg-stone-800 text-ink dark:text-white text-xs font-semibold hover:bg-sand transition-colors">
+              Register
+            </Link>
+          </div>
+        </div>
+      )}
       {/* Campus Filter Indicator Banner */}
       {selectedCampus && (
         <div className="mb-4 flex items-center justify-between px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs animate-fade-in">

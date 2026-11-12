@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { api, Transaction, resolveImageUrl, User, getToken, API_BASE } from "@/lib/api";
+import { api, Transaction, resolveImageUrl, User, getToken, API_BASE, returnRentalItem } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { DealCardSkeleton } from "@/components/Skeleton";
 
@@ -362,6 +362,7 @@ export default function DealsPage() {
       <div className="space-y-4">
         {filtered.map((tx) => {
           const isBuyer = currentUser?.id === tx.buyer_id;
+          const isSeller = currentUser?.id === tx.seller_id;
           const roleLabel = isBuyer ? "You are Buyer" : "You are Seller";
           const otherPartyName = isBuyer ? (tx.seller?.full_name || tx.seller?.email || "Seller") : (tx.buyer?.full_name || tx.buyer?.email || "Buyer");
           const stateMeta = STATE_CONFIG[tx.state] || { label: tx.state, badge: "bg-gray-100 text-gray-800", desc: "" };
@@ -730,6 +731,44 @@ export default function DealsPage() {
                       : tx.state === "CONFIRMED"
                       ? "Waiting for counterparty to sign off completion…"
                       : stateMeta.desc}
+                  </div>
+                )}
+
+                {/* Rental Return Lifecycle Banner & Action */}
+                {tx.state === "COMPLETED" && tx.product?.transaction_type === "RENT" && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2 w-full justify-between bg-amber-500/10 dark:bg-amber-950/30 p-2.5 rounded-xl border border-amber-500/20">
+                    <div className="flex items-center gap-1.5 text-xs text-amber-900 dark:text-amber-200">
+                      <span>⏱️</span>
+                      <span className="font-semibold">
+                        {tx.rental_returned
+                          ? "Item returned and restored to campus active listings! 🔄"
+                          : `Rental period: ${tx.rental_period_days || 30} days`}
+                      </span>
+                      {tx.rental_due_date && !tx.rental_returned && (
+                        <span className="text-[11px] text-amber-700/80 dark:text-amber-300/80">
+                          (Due: {new Date(tx.rental_due_date).toLocaleDateString()})
+                        </span>
+                      )}
+                    </div>
+                    {!tx.rental_returned && isSeller && (
+                      <button
+                        disabled={submittingAction}
+                        onClick={async () => {
+                          if (confirm("Confirm that the rented item has been returned safely? This will reactivate the listing for other students.")) {
+                            try {
+                              await returnRentalItem(tx.id);
+                              showToast("Rental item marked returned! Listing is now active again. 🔄", "success");
+                              loadData();
+                            } catch (err: any) {
+                              showToast(err.message, "error");
+                            }
+                          }
+                        }}
+                        className="text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-xs"
+                      >
+                        Confirm Item Return 🔄
+                      </button>
+                    )}
                   </div>
                 )}
 

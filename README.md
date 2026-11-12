@@ -34,10 +34,11 @@ ProductXchange is a decentralized, location-first peer-to-peer marketplace tailo
 |---|---|
 | **Frontend** | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS |
 | **Backend API** | FastAPI, Python 3.12, Uvicorn, Pydantic v2 |
-| **Database & ORM** | PostgreSQL 16, PostGIS, pgvector, SQLAlchemy 2.0, Alembic |
+| **Database & ORM** | PostgreSQL 16, PostGIS, pgvector, SQLAlchemy 2.0, Alembic (Supabase) |
+| **Cloud Storage** | Supabase Storage (BaaS) & Local Static Fallback (Zero AWS S3) |
 | **Caching & OTP** | Redis (with in-memory fallback & rate limiting) |
 | **Testing** | Pytest, HTTPX, SQLite Spatial Test Engine |
-| **Infrastructure** | Terraform, AWS ECS, RDS, S3, Docker, GitHub Actions |
+| **Infrastructure** | Supabase BaaS, Docker, GitHub Actions |
 
 ---
 
@@ -90,14 +91,15 @@ ProductXchange is a decentralized, location-first peer-to-peer marketplace tailo
 
 ## Running the Automated Test Suite
 
-A complete suite of **127 automated unit, integration, and adversarial security tests** verifies authentication, access control, state machine transitions, privacy enforcement, search filtering, and penetration loopholes:
+A complete suite of **132 automated unit, integration, and adversarial security tests** verifies authentication, access control, state machine transitions, privacy enforcement, search filtering, and penetration loopholes:
 
 ```bash
 # Run all tests with pytest
 .\venv\Scripts\pytest backend\tests -v
 ```
 
-### Test Coverage Summary (127 Passing Tests across 18 Test Modules):
+### Test Coverage Summary (132 Passing Tests across 19 Test Modules):
+- **`test_audit_improvements_and_features.py`**: 5 comprehensive verification tests covering the end-to-end rental return circular economy lifecycle (`ACTIVE` ➔ `RENTED` ➔ return confirmation ➔ `ACTIVE`), strict `confirm()` counterparty authorization, student watchlist / saved items collection and toggling, memory-safe streaming CSV export, and full CORS `PUT` allowance.
 - **`test_hacker_penetration_suite.py`**: 12 hacker penetration tests verifying zero-day defenses: blocking mutations on SOLD/REMOVED items, auto-cancelling orphaned negotiations upon account closure, blocking third-party spoofed product IDs in chat, brute-force PIN rate-limiting, zero/negative price guards on buy listings, spatial coordinate bounding [-90, 90], inverted price window validation, insecure HTTP attachment blocking, spreadsheet formula injection defense (CWE-1236), 24h bump spam cooldowns, and cross-conversation access denial.
 - **`test_adversarial_security_suite.py`**: 13 penetration test cases preventing rug-pull deletions, ghost product messaging, suspended account exploitation, algorithm-none JWT bypasses, stored XSS, self-blocking, and invalid targets.
 - **`test_all_features_master_suite.py`**: Comprehensive end-to-end integration across all 14 core system capabilities.
