@@ -174,7 +174,12 @@ class MessageCreate(BaseModel):
         if v is None or v == "":
             return None
         v = v.strip()
+        import re
+        if "\n" in v or "\r" in v or "\x00" in v:
+            raise ValueError("image_url contains invalid characters")
         if not (v.startswith("https://") or v.startswith("/uploads/")):
             raise ValueError("image_url must start with https:// or /uploads/")
+        if not bool(re.search(r"\.(jpg|jpeg|png|webp)(\?.*)?$", v, re.IGNORECASE)):
+            raise ValueError("image_url must have a valid image extension (.jpg, .jpeg, .png, .webp)")
         return v
 

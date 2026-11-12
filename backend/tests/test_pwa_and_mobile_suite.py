@@ -142,3 +142,4 @@ def test_mobile_components_present():
 
     offline_banner = os.path.join(comp_dir, "OfflineBanner.tsx")
     assert os.path.exists(offline_banner), "OfflineBanner.tsx must exist"
+

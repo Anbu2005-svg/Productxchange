@@ -129,6 +129,13 @@ def db():
 def clean_tables(db):
     from app.core.rate_limit import _local_rate_store
     from app.routers.auth import _local_login_attempts, _local_otp_store, _local_otp_failures, _local_otp_cooldowns
+    try:
+        from app.routers.analytics import _metrics_cache
+        _metrics_cache["summary"] = None
+        _metrics_cache["category_distribution"] = None
+        _metrics_cache["timestamp"] = 0.0
+    except Exception:
+        pass
     _local_rate_store.clear()
     _local_login_attempts.clear()
     _local_otp_store.clear()
@@ -155,6 +162,13 @@ def clean_tables(db):
     db.commit()
     try:
         db.execute(sa.text("PRAGMA foreign_keys=ON;"))
+    except Exception:
+        pass
+    try:
+        from app.routers.analytics import _metrics_cache
+        _metrics_cache["summary"] = None
+        _metrics_cache["category_distribution"] = None
+        _metrics_cache["timestamp"] = 0.0
     except Exception:
         pass
     _local_rate_store.clear()

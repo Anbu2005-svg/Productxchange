@@ -9,7 +9,20 @@ from app.ai import vision, description, pricing
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
 MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+def _validate_image_bytes(data: bytes, ext: str) -> bool:
+    if not data or len(data) < 12:
+        return False
+    if ext in (".jpg", ".jpeg") and data.startswith(b"\xff\xd8\xff"):
+        return True
+    if ext == ".png" and data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+    if ext == ".webp" and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return True
+    return False
 
 
 @router.post("/suggest-listing")
@@ -20,9 +33,18 @@ async def suggest_listing(file: UploadFile = File(...), user: User = Depends(get
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Only JPG, PNG, and WebP images are supported for AI suggestion.")
 
+    if file.content_type and file.content_type.lower() not in ALLOWED_IMAGE_MIMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid MIME type '{file.content_type}'. Allowed: image/jpeg, image/png, image/webp",
+        )
+
     content = await file.read(MAX_IMAGE_SIZE + 1)
     if len(content) > MAX_IMAGE_SIZE:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 5 MB.")
+
+    if not _validate_image_bytes(content, ext):
+        raise HTTPException(status_code=400, detail="Corrupt or invalid image format.")
 
     import anyio
     attrs = await anyio.to_thread.run_sync(vision.analyze_image, content)
