@@ -135,13 +135,28 @@ def clean_tables(db):
     _local_otp_failures.clear()
     _local_otp_cooldowns.clear()
     yield
+    try:
+        db.rollback()
+    except Exception:
+        pass
+    try:
+        db.execute(sa.text("PRAGMA foreign_keys=OFF;"))
+    except Exception:
+        pass
     for table in reversed(Base.metadata.sorted_tables):
-        db.execute(table.delete())
+        try:
+            db.execute(table.delete())
+        except Exception:
+            pass
     try:
         db.execute(sa.text("DELETE FROM push_subscriptions"))
     except Exception:
         pass
     db.commit()
+    try:
+        db.execute(sa.text("PRAGMA foreign_keys=ON;"))
+    except Exception:
+        pass
     _local_rate_store.clear()
     _local_login_attempts.clear()
     _local_otp_store.clear()
