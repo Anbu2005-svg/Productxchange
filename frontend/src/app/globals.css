@@ -34,11 +34,37 @@
 }
 
 /* ── Base Styles ───────────────────────────────────── */
+html {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overflow-x: hidden;
+}
+
 body {
   background-color: var(--sand);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+}
+
+/* ── Mobile Input Auto-Zoom Prevention (iOS Safari) ── */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* ── Safe Area Inset Helpers ───────────────────────── */
+.safe-area-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+}
+
+.safe-area-top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
 }
 
 @media print {

@@ -1,13 +1,32 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import MobileBottomNav from "@/components/MobileBottomNav";
+import PwaInstallPrompt from "@/components/PwaInstallPrompt";
+import OfflineBanner from "@/components/OfflineBanner";
 import PushNotificationBanner from "@/components/PushNotificationBanner";
 import { ToastProvider } from "@/components/Toast";
 
 export const metadata: Metadata = {
   title: "ProductXchange — Campus Peer-to-Peer Marketplace",
-  description: "Find, exchange, rent, or donate college essentials nearby.",
+  description: "Find, exchange, rent, or donate college essentials nearby with Handshake PIN verification.",
   manifest: "/manifest.json",
+  applicationName: "ProductXchange",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "ProductXchange",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {
@@ -16,6 +35,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
+  userScalable: true,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -29,25 +49,40 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="ProductXchange" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="application-name" content="ProductXchange" />
+        <meta name="format-detection" content="telephone=no" />
         <meta name="theme-color" content="#2f6b4f" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').catch(function() {});
+                  navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                    reg.update();
+                  }).catch(function() {});
                 });
               }
             `,
           }}
         />
       </head>
-      <body className="min-h-screen flex flex-col bg-sand dark:bg-[#131a16] text-ink dark:text-[#eaf1ed] transition-colors" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <body
+        className="min-h-screen flex flex-col bg-sand dark:bg-[#131a16] text-ink dark:text-[#eaf1ed] transition-colors overscroll-y-none select-none-touch"
+        style={{ fontFamily: "'Inter', sans-serif" }}
+      >
         <ToastProvider>
+          <OfflineBanner />
           <PushNotificationBanner />
           <Navbar />
-          <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6">{children}</main>
-          <footer className="border-t border-ink/8 dark:border-white/10 py-8 bg-sand/50 dark:bg-[#111714] text-xs text-ink/60 dark:text-stone-400 mt-12 transition-colors">
+          <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 pb-24 sm:pb-8">
+            {children}
+          </main>
+          <footer className="border-t border-ink/8 dark:border-white/10 py-8 pb-28 sm:pb-8 bg-sand/50 dark:bg-[#111714] text-xs text-ink/60 dark:text-stone-400 mt-12 transition-colors">
             <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs">
@@ -67,6 +102,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
             </div>
           </footer>
+          <MobileBottomNav />
+          <PwaInstallPrompt />
         </ToastProvider>
       </body>
     </html>

@@ -1,18 +1,86 @@
 {
-  "name": "ProductXchange Campus",
+  "name": "ProductXchange — Campus Peer-to-Peer Marketplace",
   "short_name": "ProductXchange",
-  "description": "Hyper-local campus circular economy & student marketplace",
-  "start_url": "/",
+  "description": "Hyper-local campus circular economy & student marketplace with Handshake PIN verification.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "id": "/?source=pwa",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait",
   "background_color": "#f6f3ec",
   "theme_color": "#2f6b4f",
-  "orientation": "portrait",
+  "categories": ["shopping", "education", "lifestyle"],
+  "lang": "en",
+  "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/icons/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Explore Nearby",
+      "short_name": "Explore",
+      "description": "Browse college essentials and textbooks nearby",
+      "url": "/?source=shortcut",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Sell / Post Item",
+      "short_name": "Sell",
+      "description": "List an item for sale or rental on your campus",
+      "url": "/listings/new?source=shortcut",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "My Campus Deals",
+      "short_name": "Deals",
+      "description": "View negotiations, counter-offers, and Handshake PINs",
+      "url": "/deals?source=shortcut",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Campus Chat",
+      "short_name": "Chat",
+      "description": "Real-time encrypted student peer messaging",
+      "url": "/chat?source=shortcut",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Saved Watchlist",
+      "short_name": "Watchlist",
+      "description": "Quickly access bookmarked campus listings",
+      "url": "/saved?source=shortcut",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
     }
   ]
 }
