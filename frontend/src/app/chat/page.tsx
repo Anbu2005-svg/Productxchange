@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, User } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { api, User, getToken } from "@/lib/api";
 
 type Conversation = {
   id: number;
@@ -24,6 +25,7 @@ type ConversationDisplay = Conversation & {
 };
 
 export default function ChatListPage() {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [conversations, setConversations] = useState<ConversationDisplay[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,11 +33,15 @@ export default function ChatListPage() {
 
   useEffect(() => {
     async function load() {
+      const token = getToken();
+      if (!token) {
+        router.replace("/login?redirect=/chat");
+        return;
+      }
       try {
         const user = await api("/auth/me").catch(() => null);
         if (!user) {
-          setError("Please log in to view your conversations.");
-          setLoading(false);
+          router.replace("/login?redirect=/chat");
           return;
         }
         setCurrentUser(user);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { api, getToken } from "@/lib/api";
 
 type SustainabilityData = {
@@ -26,6 +27,7 @@ type SustainabilityData = {
 };
 
 export default function SustainabilityImpactPage() {
+  const router = useRouter();
   const [data, setData] = useState<SustainabilityData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -33,7 +35,12 @@ export default function SustainabilityImpactPage() {
   const [userName, setUserName] = useState("Campus Student");
 
   useEffect(() => {
-    setIsLoggedIn(!!getToken());
+    const token = getToken();
+    if (!token) {
+      router.replace("/login?redirect=/impact");
+      return;
+    }
+    setIsLoggedIn(true);
     api("/auth/me")
       .then((u) => {
         if (u?.full_name) setUserName(u.full_name);
@@ -45,7 +52,7 @@ export default function SustainabilityImpactPage() {
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [router]);
 
   const CATEGORY_ICONS: Record<string, string> = {
     Textbooks: "📚",

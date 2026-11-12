@@ -121,89 +121,91 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Nav Links */}
-          <div className="hidden sm:flex items-center gap-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`text-sm font-semibold px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 relative ${
-                  pathname === link.href
-                    ? "text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-500/20"
-                    : "text-ink/65 dark:text-stone-300 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/5 dark:hover:bg-emerald-500/10"
-                }`}
-              >
-                <span className="text-sm">{link.icon}</span>
-                {link.label}
-                {Boolean(link.badge && link.badge > 0) && (
-                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
-                    {link.badge}
+          {user && (
+            <div className="hidden sm:flex items-center gap-1">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`text-sm font-semibold px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 relative ${
+                    pathname === link.href
+                      ? "text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-500/20"
+                      : "text-ink/65 dark:text-stone-300 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/5 dark:hover:bg-emerald-500/10"
+                  }`}
+                >
+                  <span className="text-sm">{link.icon}</span>
+                  {link.label}
+                  {Boolean(link.badge && link.badge > 0) && (
+                    <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
+                      {link.badge}
+                    </span>
+                  )}
+                </Link>
+              ))}
+              {/* Multi-Campus Selector Switcher */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setCampusDropdownOpen(!campusDropdownOpen)}
+                  className="hidden md:flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-ink/10 dark:border-white/10 bg-sand/60 dark:bg-stone-800 text-ink/80 dark:text-stone-200 hover:border-emerald-500/40 transition-all shadow-2xs"
+                  title="Filter by college campus"
+                >
+                  <span>🏫</span>
+                  <span className="max-w-[130px] truncate">
+                    {selectedCampus === "ALL" ? "All Campuses" : selectedCampus}
                   </span>
-                )}
-              </Link>
-            ))}
-            {/* Multi-Campus Selector Switcher */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setCampusDropdownOpen(!campusDropdownOpen)}
-                className="hidden md:flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-ink/10 dark:border-white/10 bg-sand/60 dark:bg-stone-800 text-ink/80 dark:text-stone-200 hover:border-emerald-500/40 transition-all shadow-2xs"
-                title="Filter by college campus"
-              >
-                <span>🏫</span>
-                <span className="max-w-[130px] truncate">
-                  {selectedCampus === "ALL" ? "All Campuses" : selectedCampus}
-                </span>
-                <span className="text-[10px] text-ink/40 dark:text-stone-400">▾</span>
-              </button>
+                  <span className="text-[10px] text-ink/40 dark:text-stone-400">▾</span>
+                </button>
 
-              {campusDropdownOpen && (
-                <div className="absolute top-full mt-1.5 left-0 w-64 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl shadow-xl py-1 z-50 text-xs">
-                  <div className="px-3 py-1.5 border-b border-ink/5 dark:border-stone-800 font-bold text-ink/50 dark:text-stone-400 text-[10px] uppercase tracking-wider">
-                    Select Campus Hub
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectCampus("ALL")}
-                    className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
-                      selectedCampus === "ALL" ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
-                    }`}
-                  >
-                    <span>🌐 All Bangalore Campuses</span>
-                    {selectedCampus === "ALL" && <span>✓</span>}
-                  </button>
-
-                  {user?.college && (
+                {campusDropdownOpen && (
+                  <div className="absolute top-full mt-1.5 left-0 w-64 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl shadow-xl py-1 z-50 text-xs">
+                    <div className="px-3 py-1.5 border-b border-ink/5 dark:border-stone-800 font-bold text-ink/50 dark:text-stone-400 text-[10px] uppercase tracking-wider">
+                      Select Campus Hub
+                    </div>
                     <button
                       type="button"
-                      onClick={() => handleSelectCampus(user.college!)}
-                      className={`w-full text-left px-3 py-2 flex items-center justify-between border-t border-b border-ink/5 dark:border-stone-800 hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
-                        selectedCampus === user.college ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
+                      onClick={() => handleSelectCampus("ALL")}
+                      className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
+                        selectedCampus === "ALL" ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
                       }`}
                     >
-                      <span className="truncate">🎓 My Campus: {user.college}</span>
-                      {selectedCampus === user.college && <span>✓</span>}
+                      <span>🌐 All Bangalore Campuses</span>
+                      {selectedCampus === "ALL" && <span>✓</span>}
                     </button>
-                  )}
 
-                  <div className="max-h-48 overflow-y-auto">
-                    {campuses.map((c) => (
+                    {user?.college && (
                       <button
-                        key={c.college}
                         type="button"
-                        onClick={() => handleSelectCampus(c.college)}
-                        className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
-                          selectedCampus === c.college ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
+                        onClick={() => handleSelectCampus(user.college!)}
+                        className={`w-full text-left px-3 py-2 flex items-center justify-between border-t border-b border-ink/5 dark:border-stone-800 hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
+                          selectedCampus === user.college ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
                         }`}
                       >
-                        <span className="truncate pr-2">{c.college}</span>
-                        <span className="text-[10px] text-ink/40 dark:text-stone-400 font-mono">{c.count} items</span>
+                        <span className="truncate">🎓 My Campus: {user.college}</span>
+                        {selectedCampus === user.college && <span>✓</span>}
                       </button>
-                    ))}
+                    )}
+
+                    <div className="max-h-48 overflow-y-auto">
+                      {campuses.map((c) => (
+                        <button
+                          key={c.college}
+                          type="button"
+                          onClick={() => handleSelectCampus(c.college)}
+                          className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
+                            selectedCampus === c.college ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
+                          }`}
+                        >
+                          <span className="truncate pr-2">{c.college}</span>
+                          <span className="text-[10px] text-ink/40 dark:text-stone-400 font-mono">{c.count} items</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 text-sm">
@@ -218,12 +220,14 @@ export default function Navbar() {
           </button>
 
           {/* Desktop Sell Button */}
-          <Link
-            href="/listings/new"
-            className="hidden sm:inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-95"
-          >
-            <span>+</span> Sell Item
-          </Link>
+          {user && (
+            <Link
+              href="/listings/new"
+              className="hidden sm:inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-95"
+            >
+              <span>+</span> Sell Item
+            </Link>
+          )}
 
           {!loading && user ? (
             <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-ink/10 dark:border-stone-700">
@@ -311,57 +315,61 @@ export default function Navbar() {
 
           <div className="sm:hidden absolute left-0 right-0 top-full bg-white dark:bg-stone-900 border-b border-ink/10 dark:border-white/10 shadow-2xl z-50 animate-slide-down max-h-[calc(100dvh-60px)] overflow-y-auto">
             <div className="max-w-5xl mx-auto px-4 py-4 space-y-1.5">
-              {/* Campus Selector in Mobile Menu */}
-              <div className="pb-2 border-b border-ink/10 dark:border-stone-800">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-ink/50 dark:text-stone-400 block mb-1.5 px-1">
-                  🏫 Campus Hub
-                </label>
-                <select
-                  value={selectedCampus}
-                  onChange={(e) => handleSelectCampus(e.target.value)}
-                  className="w-full bg-sand/60 dark:bg-stone-800 border border-ink/10 dark:border-stone-700 rounded-xl px-3 py-2 text-xs font-semibold text-ink dark:text-white focus:outline-none focus:border-moss"
-                >
-                  <option value="ALL">🌐 All Campuses (Bangalore)</option>
-                  {user?.college && (
-                    <option value={user.college}>🎓 My Campus ({user.college})</option>
-                  )}
-                  {campuses.map((c) => (
-                    <option key={c.college} value={c.college}>
-                      {c.college} ({c.count} items)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                    pathname === link.href
-                      ? "text-moss dark:text-emerald-400 bg-moss/10 dark:bg-moss/20 font-bold"
-                      : "text-ink/80 dark:text-stone-200 hover:text-moss dark:hover:text-emerald-400 hover:bg-sand/60 dark:hover:bg-stone-800"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-base">{link.icon}</span>
-                    {link.label}
+              {user && (
+                <>
+                  {/* Campus Selector in Mobile Menu */}
+                  <div className="pb-2 border-b border-ink/10 dark:border-stone-800">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-ink/50 dark:text-stone-400 block mb-1.5 px-1">
+                      🏫 Campus Hub
+                    </label>
+                    <select
+                      value={selectedCampus}
+                      onChange={(e) => handleSelectCampus(e.target.value)}
+                      className="w-full bg-sand/60 dark:bg-stone-800 border border-ink/10 dark:border-stone-700 rounded-xl px-3 py-2 text-xs font-semibold text-ink dark:text-white focus:outline-none focus:border-moss"
+                    >
+                      <option value="ALL">🌐 All Campuses (Bangalore)</option>
+                      {user?.college && (
+                        <option value={user.college}>🎓 My Campus ({user.college})</option>
+                      )}
+                      {campuses.map((c) => (
+                        <option key={c.college} value={c.college}>
+                          {c.college} ({c.count} items)
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  {Boolean(link.badge && link.badge > 0) && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
-                      {link.badge}
-                    </span>
-                  )}
-                </Link>
-              ))}
 
-              <Link
-                href="/listings/new"
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-white bg-moss hover:bg-moss/90 transition-colors shadow-sm"
-              >
-                <span className="text-base">➕</span>
-                Sell / List Item
-              </Link>
+                  {navLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                        pathname === link.href
+                          ? "text-moss dark:text-emerald-400 bg-moss/10 dark:bg-moss/20 font-bold"
+                          : "text-ink/80 dark:text-stone-200 hover:text-moss dark:hover:text-emerald-400 hover:bg-sand/60 dark:hover:bg-stone-800"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-base">{link.icon}</span>
+                        {link.label}
+                      </div>
+                      {Boolean(link.badge && link.badge > 0) && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
+                          {link.badge}
+                        </span>
+                      )}
+                    </Link>
+                  ))}
+
+                  <Link
+                    href="/listings/new"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-white bg-moss hover:bg-moss/90 transition-colors shadow-sm"
+                  >
+                    <span className="text-base">➕</span>
+                    Sell / List Item
+                  </Link>
+                </>
+              )}
 
               <div className="border-t border-ink/10 dark:border-stone-800 pt-3 mt-2">
                 {user ? (

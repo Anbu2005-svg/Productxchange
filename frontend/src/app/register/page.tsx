@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, setToken } from "@/lib/api";
+import { api, setToken, getToken } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
 function getPasswordStrength(pw: string): { label: string; color: string; width: string } {
@@ -23,6 +23,13 @@ function getPasswordStrength(pw: string): { label: string; color: string; width:
 export default function RegisterPage() {
   const router = useRouter();
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (getToken()) {
+      router.replace("/");
+    }
+  }, [router]);
+
   const [form, setForm] = useState({
     email: "",
     password: "",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, User, getToken, API_BASE } from "@/lib/api";
 
@@ -25,6 +25,7 @@ type ConversationInfo = {
 };
 
 export default function ChatThreadPage() {
+  const router = useRouter();
   const { id: conversationId } = useParams<{ id: string }>();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [convo, setConvo] = useState<ConversationInfo | null>(null);
@@ -53,6 +54,12 @@ export default function ChatThreadPage() {
   }, [conversationId]);
 
   useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      router.replace(`/login?redirect=/chat/${conversationId}`);
+      return;
+    }
+
     async function load() {
       try {
         const user = await api("/auth/me");
@@ -72,7 +79,6 @@ export default function ChatThreadPage() {
     load();
 
     // Connect to WebSocket for instant real-time messaging
-    const token = getToken();
     let ws: WebSocket | null = null;
     let reconnectTimer: any = null;
 

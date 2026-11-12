@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { api, setToken } from "@/lib/api";
+import { api, setToken, getToken } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
 function LoginForm() {
@@ -27,8 +27,10 @@ function LoginForm() {
   useEffect(() => {
     if (resetTokenParam) {
       setMode("reset");
+    } else if (getToken()) {
+      router.replace("/");
     }
-  }, [resetTokenParam]);
+  }, [resetTokenParam, router]);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -44,7 +46,8 @@ function LoginForm() {
       });
       setToken(access_token);
       showToast("Welcome back! 👋", "success");
-      router.push("/");
+      const redirect = searchParams.get("redirect") || "/";
+      router.push(redirect);
     } catch (err: any) {
       setError(err.message);
     } finally {

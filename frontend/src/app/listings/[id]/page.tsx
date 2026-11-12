@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { api, Product, resolveImageUrl, User, reportListing, saveProduct, unsaveProduct } from "@/lib/api";
+import { api, Product, resolveImageUrl, User, reportListing, saveProduct, unsaveProduct, getToken } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 
 const CampusMap = dynamic(() => import("@/components/CampusMap"), {
@@ -75,6 +75,12 @@ export default function ListingDetailPage() {
   }
 
   useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      router.replace(`/login?redirect=/listings/${id}`);
+      return;
+    }
+
     api("/auth/me").then(setCurrentUser).catch(() => setCurrentUser(null));
 
     api(`/products/${id}`)
@@ -89,7 +95,7 @@ export default function ListingDetailPage() {
         }
       })
       .catch((e) => setError(e.message));
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
     if (product?.category) {

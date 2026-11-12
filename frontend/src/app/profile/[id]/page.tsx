@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, resolveImageUrl, uploadAvatar, updateProfile, removeToken, User } from "@/lib/api";
+import { api, resolveImageUrl, uploadAvatar, updateProfile, removeToken, User, getToken } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
 type ProfileListing = {
@@ -88,10 +88,15 @@ export default function UserProfilePage() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      router.replace(`/login?redirect=/profile/${id}`);
+      return;
+    }
     api("/auth/me").then(setCurrentUser).catch(() => setCurrentUser(null));
 
     loadProfile();
-  }, [id]);
+  }, [id, router]);
 
   function loadProfile() {
     api(`/auth/users/${id}/public-profile`)

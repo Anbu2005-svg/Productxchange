@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, uploadProductImage, uploadProductImageWithAngle, convertProductTo3D, suggestListingAI, compressImage } from "@/lib/api";
+import { api, uploadProductImage, uploadProductImageWithAngle, convertProductTo3D, suggestListingAI, compressImage, getToken } from "@/lib/api";
 import MultiAnglePhotoStudio, { AngleData, AnglePreviews } from "@/components/MultiAnglePhotoStudio";
 import { useToast } from "@/components/Toast";
 
@@ -22,6 +22,12 @@ export default function NewListingPage() {
   const router = useRouter();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!getToken()) {
+      router.replace("/login?redirect=/listings/new");
+    }
+  }, [router]);
 
   const [form, setForm] = useState({
     title: "",
