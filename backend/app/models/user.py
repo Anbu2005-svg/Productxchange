@@ -16,9 +16,9 @@ class User(Base):
 
     college = Column(String, nullable=True)  # optional metadata, not a gate
     verification_method = Column(String, nullable=True)  # college_email | phone_otp | gov_id
-    is_verified = Column(Boolean, default=False)
+    is_verified = Column(Boolean, default=False, index=True)
     is_admin = Column(Boolean, default=False)
-    is_blocked_flag = Column(Boolean, default=False)  # admin-level suspension
+    is_blocked_flag = Column(Boolean, default=False, index=True)  # admin-level suspension
 
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)

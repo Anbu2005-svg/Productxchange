@@ -93,8 +93,20 @@ def list_users(
 
 
 @router.get("/reports")
-def list_reports(resolved: bool = False, db: Session = Depends(get_db)):
-    return db.query(Report).filter(Report.resolved == resolved).order_by(Report.created_at.desc()).all()
+def list_reports(
+    resolved: bool = False,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(Report)
+        .filter(Report.resolved == resolved)
+        .order_by(Report.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.post("/reports/{report_id}/resolve")

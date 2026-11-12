@@ -96,9 +96,27 @@ export default function NotificationBell() {
 
     connectWs();
 
-    const interval = setInterval(fetchUnreadCount, 30000);
+    // Only poll when browser tab is active/visible (conserves battery and bandwidth for 5M users)
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchUnreadCount();
+      }
+    }, 30000);
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchUnreadCount();
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
     return () => {
       clearInterval(interval);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (ws) {
         ws.onclose = null;

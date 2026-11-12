@@ -137,10 +137,27 @@ export default function ChatThreadPage() {
 
     connectWs();
 
-    // Fallback background polling every 20 seconds
-    pollRef.current = setInterval(fetchMessages, 20000);
+    // Adaptive fallback polling: only poll when tab is visible and WebSocket is disconnected
+    pollRef.current = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
+      fetchMessages();
+    }, 15000);
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchMessages();
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (ws) {
         ws.onclose = null;

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, func, Text, CheckConstraint, UniqueConstraint
+from sqlalchemy import Column, Integer, DateTime, ForeignKey, func, Text, CheckConstraint, UniqueConstraint, Index
 
 from app.core.database import Base
 
@@ -8,6 +8,7 @@ class Review(Base):
     __table_args__ = (
         CheckConstraint("rating >= 1 AND rating <= 5"),
         UniqueConstraint("transaction_id", "reviewer_id", name="uq_transaction_reviewer"),
+        Index("ix_reviews_reviewee_created", "reviewee_id", "created_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)

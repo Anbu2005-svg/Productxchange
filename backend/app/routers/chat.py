@@ -86,20 +86,18 @@ def list_conversations(
 
 @router.get("/unread-count")
 def get_unread_count(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Returns total count of unread messages across all user conversations."""
-    convo_ids = [
-        c.id for c in db.query(Conversation.id).filter(
-            or_(Conversation.user_a_id == user.id, Conversation.user_b_id == user.id)
-        ).all()
-    ]
-    if not convo_ids:
-        return {"unread_count": 0}
-
-    unread = db.query(Message).filter(
-        Message.conversation_id.in_(convo_ids),
-        Message.sender_id != user.id,
-        Message.read == False,  # noqa: E712
-    ).count()
+    """Returns total count of unread messages across all user conversations in a single indexed JOIN query."""
+    from sqlalchemy import func
+    unread = (
+        db.query(func.count(Message.id))
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .filter(
+            or_(Conversation.user_a_id == user.id, Conversation.user_b_id == user.id),
+            Message.sender_id != user.id,
+            Message.read == False,  # noqa: E712
+        )
+        .scalar()
+    ) or 0
     return {"unread_count": unread}
 
 

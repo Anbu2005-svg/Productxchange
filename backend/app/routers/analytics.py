@@ -1,3 +1,4 @@
+import time
 from typing import Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -10,6 +11,12 @@ from app.models.product import Product, ProductStatus
 from app.models.transaction import Transaction, TransactionState
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+_metrics_cache = {
+    "summary": None,
+    "category_distribution": None,
+    "timestamp": 0.0,
+}
 
 # Estimated carbon and waste savings factors per category based on life cycle assessment (LCA)
 CATEGORY_IMPACT_FACTORS = {
@@ -50,63 +57,84 @@ def get_sustainability_metrics(
     - Items circulated across campus
     - Personal eco-impact badge (if logged in)
     """
-    # 1. Total active listings and completed transactions
-    total_listings = db.query(func.count(Product.id)).scalar() or 0
-    completed_count = (
-        db.query(func.count(Transaction.id))
-        .filter(Transaction.state == TransactionState.COMPLETED)
-        .scalar() or 0
-    )
-    circulated_count = max(completed_count, total_listings)  # Account for all circulating peer items
-
-    # 2. Memory-Safe SQL Aggregations: O(1) heap memory, prevents Out-Of-Memory (OOM) algorithmic DoS
-    product_stats = (
-        db.query(
-            Product.category,
-            Product.status,
-            func.count(Product.id),
-            func.sum(func.coalesce(Product.price, 0.0)),
+    now = time.time()
+    if now - _metrics_cache["timestamp"] < 60.0 and _metrics_cache["summary"] is not None:
+        campus_summary = _metrics_cache["summary"]
+        category_distribution = _metrics_cache["category_distribution"]
+    else:
+        # 1. Total active listings and completed transactions
+        total_listings = db.query(func.count(Product.id)).scalar() or 0
+        completed_count = (
+            db.query(func.count(Transaction.id))
+            .filter(Transaction.state == TransactionState.COMPLETED)
+            .scalar() or 0
         )
-        .group_by(Product.category, Product.status)
-        .all()
-    )
+        circulated_count = max(completed_count, total_listings)  # Account for all circulating peer items
 
-    total_co2_kg = 0.0
-    total_waste_kg = 0.0
-    total_rupees_saved = 0.0
-    category_counts: dict[str, int] = {}
+        # 2. Memory-Safe SQL Aggregations: O(1) heap memory, prevents Out-Of-Memory (OOM) algorithmic DoS
+        product_stats = (
+            db.query(
+                Product.category,
+                Product.status,
+                func.count(Product.id),
+                func.sum(func.coalesce(Product.price, 0.0)),
+            )
+            .group_by(Product.category, Product.status)
+            .all()
+        )
 
-    for cat, status, count, price_sum in product_stats:
-        cat_name = cat or "General"
-        category_counts[cat_name] = category_counts.get(cat_name, 0) + count
-        factors = _get_factors(cat_name)
+        total_co2_kg = 0.0
+        total_waste_kg = 0.0
+        total_rupees_saved = 0.0
+        category_counts: dict[str, int] = {}
 
-        # Baseline savings: listing an item keeps it in circular economy
-        item_multiplier = 1.5 if status == ProductStatus.SOLD else 1.0
-        total_co2_kg += factors["co2_kg"] * item_multiplier * count
-        total_waste_kg += factors["waste_kg"] * item_multiplier * count
+        for cat, status, count, price_sum in product_stats:
+            cat_name = cat or "General"
+            category_counts[cat_name] = category_counts.get(cat_name, 0) + count
+            factors = _get_factors(cat_name)
 
-        # Savings = retail estimated price minus campus second-hand price
-        retail_est = factors["avg_new_price"] * count
-        actual_price = float(price_sum or 0.0)
-        savings = max(0.0, retail_est - actual_price)
-        total_rupees_saved += savings
+            # Baseline savings: listing an item keeps it in circular economy
+            item_multiplier = 1.5 if status == ProductStatus.SOLD else 1.0
+            total_co2_kg += factors["co2_kg"] * item_multiplier * count
+            total_waste_kg += factors["waste_kg"] * item_multiplier * count
 
-    # If completed transactions exist, incorporate agreed prices via SQL group-by
-    completed_cat_counts = (
-        db.query(Product.category, func.count(Transaction.id))
-        .join(Product, Transaction.product_id == Product.id)
-        .filter(Transaction.state == TransactionState.COMPLETED)
-        .group_by(Product.category)
-        .all()
-    )
-    for cat, tx_count in completed_cat_counts:
-        factors = _get_factors(cat)
-        total_co2_kg += factors["co2_kg"] * 0.5 * tx_count
-        total_waste_kg += factors["waste_kg"] * 0.5 * tx_count
+            # Savings = retail estimated price minus campus second-hand price
+            retail_est = factors["avg_new_price"] * count
+            actual_price = float(price_sum or 0.0)
+            savings = max(0.0, retail_est - actual_price)
+            total_rupees_saved += savings
 
-    # Trees equivalent: 1 mature tree absorbs ~21 kg CO2/year
-    trees_equivalent = round(total_co2_kg / 21.0, 1)
+        # If completed transactions exist, incorporate agreed prices via SQL group-by
+        completed_cat_counts = (
+            db.query(Product.category, func.count(Transaction.id))
+            .join(Product, Transaction.product_id == Product.id)
+            .filter(Transaction.state == TransactionState.COMPLETED)
+            .group_by(Product.category)
+            .all()
+        )
+        for cat, tx_count in completed_cat_counts:
+            factors = _get_factors(cat)
+            total_co2_kg += factors["co2_kg"] * 0.5 * tx_count
+            total_waste_kg += factors["waste_kg"] * 0.5 * tx_count
+
+        # Trees equivalent: 1 mature tree absorbs ~21 kg CO2/year
+        trees_equivalent = round(total_co2_kg / 21.0, 1)
+
+        campus_summary = {
+            "total_co2_saved_kg": round(total_co2_kg, 1),
+            "trees_equivalent": trees_equivalent,
+            "total_waste_diverted_kg": round(total_waste_kg, 1),
+            "total_rupees_saved": round(total_rupees_saved),
+            "items_circulated": circulated_count,
+            "completed_deals": completed_count,
+        }
+        category_distribution = [
+            {"category": k, "count": v}
+            for k, v in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:6]
+        ]
+        _metrics_cache["summary"] = campus_summary
+        _metrics_cache["category_distribution"] = category_distribution
+        _metrics_cache["timestamp"] = now
 
     # 3. User personal impact (if logged in)
     user_impact = None
@@ -165,17 +193,7 @@ def get_sustainability_metrics(
         }
 
     return {
-        "summary": {
-            "total_co2_saved_kg": round(total_co2_kg, 1),
-            "trees_equivalent": trees_equivalent,
-            "total_waste_diverted_kg": round(total_waste_kg, 1),
-            "total_rupees_saved": round(total_rupees_saved),
-            "items_circulated": circulated_count,
-            "completed_deals": completed_count,
-        },
-        "category_distribution": [
-            {"category": k, "count": v}
-            for k, v in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:6]
-        ],
+        "summary": campus_summary,
+        "category_distribution": category_distribution,
         "user_impact": user_impact,
     }

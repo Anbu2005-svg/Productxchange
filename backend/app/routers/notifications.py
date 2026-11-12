@@ -75,8 +75,9 @@ def _validate_push_endpoint(endpoint: str):
 
 
 
-# In-memory fallback cache for fast push dispatch
+# In-memory fallback cache for fast push dispatch (bounded to prevent heap exhaustion)
 _push_subscriptions: Dict[int, list] = {}
+MAX_PUSH_CACHE_USERS = 10000
 
 
 def create_notification(db: Session, user_id: int, type: str, title: str, message: str = None, link: str = None):
@@ -223,7 +224,12 @@ def subscribe_push(
     else:
         subs.append(payload.model_dump())
 
-    # Persist to database
+    # Bound in-memory cache size to prevent memory leaks under massive scale
+    if len(_push_subscriptions) > MAX_PUSH_CACHE_USERS:
+        for old_uid in list(_push_subscriptions.keys())[:len(_push_subscriptions) - MAX_PUSH_CACHE_USERS]:
+            _push_subscriptions.pop(old_uid, None)
+
+    # Persist to database (atomic ON CONFLICT reassigns endpoint across users safely)
     try:
         if is_sqlite:
             db.execute(
@@ -294,11 +300,14 @@ async def send_test_push(
         "icon": "/icons/icon-192x192.png",
     })
 
+    from app.models.notification import PushSubscription
+    subs_count = db.query(PushSubscription).filter(PushSubscription.user_id == user.id).count()
+
     return {
         "success": True,
         "title": test_title,
         "message": test_message,
-        "subscribers_active": len(_push_subscriptions.get(user.id, [])),
+        "subscribers_active": subs_count,
     }
 
 

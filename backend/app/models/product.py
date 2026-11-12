@@ -1,6 +1,6 @@
 import enum
 from sqlalchemy import (
-    Column, Integer, String, Float, DateTime, ForeignKey, func, Enum, ARRAY, Text, Boolean, UniqueConstraint
+    Column, Integer, String, Float, DateTime, ForeignKey, func, Enum, ARRAY, Text, Boolean, UniqueConstraint, Index
 )
 from sqlalchemy.types import UserDefinedType
 from sqlalchemy.orm import relationship
@@ -45,6 +45,11 @@ class ProductStatus(str, enum.Enum):
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        Index("ix_products_status_created_at", "status", "created_at"),
+        Index("ix_products_status_category", "status", "category"),
+        Index("ix_products_seller_status", "seller_id", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     seller_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -74,7 +79,7 @@ class Product(Base):
     ai_suggested_price = Column(Float, nullable=True)
     ai_suggested_description = Column(Text, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     seller = relationship("User")
 
@@ -83,6 +88,7 @@ class SavedProduct(Base):
     __tablename__ = "saved_products"
     __table_args__ = (
         UniqueConstraint("user_id", "product_id", name="uq_user_saved_product"),
+        Index("ix_saved_products_user_created", "user_id", "created_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)

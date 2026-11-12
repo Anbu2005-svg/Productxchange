@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, func, Enum, Text, Boolean, String
+from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, func, Enum, Text, Boolean, String, Index
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -29,6 +29,14 @@ VALID_TRANSITIONS = {
 
 class Transaction(Base):
     __tablename__ = "transactions"
+    __table_args__ = (
+        Index("ix_transactions_buyer_updated", "buyer_id", "updated_at"),
+        Index("ix_transactions_seller_updated", "seller_id", "updated_at"),
+        Index("ix_transactions_buyer_state", "buyer_id", "state"),
+        Index("ix_transactions_seller_state", "seller_id", "state"),
+        Index("ix_transactions_product_state", "product_id", "state"),
+        Index("ix_transactions_created_at", "created_at"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
@@ -58,6 +66,9 @@ class Transaction(Base):
 
 class Offer(Base):
     __tablename__ = "offers"
+    __table_args__ = (
+        Index("ix_offers_tx_created", "transaction_id", "created_at"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False, index=True)

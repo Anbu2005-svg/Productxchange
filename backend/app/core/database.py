@@ -77,14 +77,30 @@ else:
     engine_kwargs = {
         "pool_pre_ping": True,
         "pool_recycle": 300,
-        "pool_size": 10,
-        "max_overflow": 20,
+        "pool_size": 30,
+        "max_overflow": 50,
+        "pool_timeout": 30,
     }
 
 engine = create_engine(settings.DATABASE_URL, connect_args=connect_args, **engine_kwargs)
 
+
+def register_pg_session_settings(dbapi_connection, connection_record=None):
+    """Enforces query and idle transaction timeouts to prevent connection starvation under massive concurrency."""
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("SET statement_timeout = '15s';")
+        cursor.execute("SET idle_in_transaction_session_timeout = '30s';")
+    except Exception:
+        pass
+    finally:
+        cursor.close()
+
+
 if is_sqlite:
     event.listens_for(engine, "connect")(register_sqlite_functions)
+else:
+    event.listens_for(engine, "connect")(register_pg_session_settings)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -192,6 +208,41 @@ def ensure_schema_migrations():
                     );
                 """))
                 conn.commit()
+
+            # High-concurrency composite indexes (5M users scale)
+            index_sqls = [
+                "CREATE INDEX IF NOT EXISTS ix_products_status_created_at ON products(status, created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_products_status_category ON products(status, category)",
+                "CREATE INDEX IF NOT EXISTS ix_products_seller_status ON products(seller_id, status)",
+                "CREATE INDEX IF NOT EXISTS ix_products_created_at ON products(created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_saved_products_user_created ON saved_products(user_id, created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_transactions_buyer_updated ON transactions(buyer_id, updated_at)",
+                "CREATE INDEX IF NOT EXISTS ix_transactions_seller_updated ON transactions(seller_id, updated_at)",
+                "CREATE INDEX IF NOT EXISTS ix_transactions_buyer_state ON transactions(buyer_id, state)",
+                "CREATE INDEX IF NOT EXISTS ix_transactions_seller_state ON transactions(seller_id, state)",
+                "CREATE INDEX IF NOT EXISTS ix_transactions_product_state ON transactions(product_id, state)",
+                "CREATE INDEX IF NOT EXISTS ix_transactions_created_at ON transactions(created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_offers_tx_created ON offers(transaction_id, created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_conversations_user_a ON conversations(user_a_id)",
+                "CREATE INDEX IF NOT EXISTS ix_conversations_user_b ON conversations(user_b_id)",
+                "CREATE INDEX IF NOT EXISTS ix_conversations_product ON conversations(product_id)",
+                "CREATE INDEX IF NOT EXISTS ix_conversations_created ON conversations(created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_messages_convo_created ON messages(conversation_id, created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_messages_convo_sender_read ON messages(conversation_id, sender_id, read)",
+                "CREATE INDEX IF NOT EXISTS ix_notifications_user_created ON notifications(user_id, created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_notifications_user_read ON notifications(user_id, is_read)",
+                "CREATE INDEX IF NOT EXISTS ix_users_is_verified ON users(is_verified)",
+                "CREATE INDEX IF NOT EXISTS ix_users_is_blocked ON users(is_blocked_flag)",
+                "CREATE INDEX IF NOT EXISTS ix_reviews_reviewee_created ON reviews(reviewee_id, created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_reports_resolved_created ON reports(resolved, created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_blocks_blocker_blocked ON blocks(blocker_id, blocked_id)",
+            ]
+            for idx_sql in index_sqls:
+                try:
+                    conn.execute(text(idx_sql))
+                except Exception:
+                    pass
+            conn.commit()
     except Exception:
         pass
 

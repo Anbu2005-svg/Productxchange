@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func, Text, Index
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -6,6 +6,12 @@ from app.core.database import Base
 
 class Conversation(Base):
     __tablename__ = "conversations"
+    __table_args__ = (
+        Index("ix_conversations_user_a", "user_a_id"),
+        Index("ix_conversations_user_b", "user_b_id"),
+        Index("ix_conversations_product", "product_id"),
+        Index("ix_conversations_created", "created_at"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
@@ -18,6 +24,10 @@ class Conversation(Base):
 
 class Message(Base):
     __tablename__ = "messages"
+    __table_args__ = (
+        Index("ix_messages_convo_created", "conversation_id", "created_at"),
+        Index("ix_messages_convo_sender_read", "conversation_id", "sender_id", "read"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)

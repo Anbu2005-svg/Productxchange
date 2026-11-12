@@ -65,6 +65,77 @@ _local_otp_store: dict[str, dict] = {}
 _local_otp_failures: dict[str, dict] = {}  # {phone: {"count": int, "first_at": float}}
 _local_login_attempts: dict[str, dict] = {}
 _local_otp_cooldowns: dict[str, float] = {}  # {phone: last_request_timestamp}
+_last_auth_cleanup: float = 0.0
+MAX_AUTH_STORE_SIZE = 20000
+
+
+def _prune_auth_in_memory_stores(now: float):
+    """Enforces bounded heap memory across in-memory auth caches under 5M user traffic."""
+    global _last_auth_cleanup
+    if (
+        now - _last_auth_cleanup < 30.0
+        and len(_local_login_attempts) < 5000
+        and len(_local_otp_store) < 5000
+        and len(_local_otp_cooldowns) < 5000
+    ):
+        return
+    _last_auth_cleanup = now
+
+    # 1. Prune expired login attempts
+    stale_logins = [
+        k for k, v in _local_login_attempts.items()
+        if now > v.get("lockout_until", 0) and (now - v.get("first_failure", 0) > 1800)
+    ]
+    for k in stale_logins:
+        _local_login_attempts.pop(k, None)
+    if len(_local_login_attempts) > MAX_AUTH_STORE_SIZE:
+        for k in list(_local_login_attempts.keys())[:len(_local_login_attempts) - MAX_AUTH_STORE_SIZE]:
+            _local_login_attempts.pop(k, None)
+
+    # 2. Prune expired OTP entries
+    stale_otps = [
+        k for k, v in _local_otp_store.items()
+        if now > v.get("expires_at", 0) and (now - v.get("window_start", 0) > 1800)
+    ]
+    for k in stale_otps:
+        _local_otp_store.pop(k, None)
+    if len(_local_otp_store) > MAX_AUTH_STORE_SIZE:
+        for k in list(_local_otp_store.keys())[:len(_local_otp_store) - MAX_AUTH_STORE_SIZE]:
+            _local_otp_store.pop(k, None)
+
+    # 3. Prune OTP cooldowns older than 5 minutes
+    stale_cooldowns = [k for k, t in _local_otp_cooldowns.items() if now - t > 300]
+    for k in stale_cooldowns:
+        _local_otp_cooldowns.pop(k, None)
+    if len(_local_otp_cooldowns) > MAX_AUTH_STORE_SIZE:
+        for k in list(_local_otp_cooldowns.keys())[:len(_local_otp_cooldowns) - MAX_AUTH_STORE_SIZE]:
+            _local_otp_cooldowns.pop(k, None)
+
+    # 4. Prune OTP failure records older than 15 minutes
+    stale_failures = [k for k, v in _local_otp_failures.items() if now - v.get("first_at", 0) > 900]
+    for k in stale_failures:
+        _local_otp_failures.pop(k, None)
+    if len(_local_otp_failures) > MAX_AUTH_STORE_SIZE:
+        for k in list(_local_otp_failures.keys())[:len(_local_otp_failures) - MAX_AUTH_STORE_SIZE]:
+            _local_otp_failures.pop(k, None)
+
+
+def _read_bounded_upload(file_obj, max_size: int, chunk_size: int = 65536) -> bytes:
+    """Streams file upload in bounded chunks to prevent heap exhaustion attacks."""
+    chunks = []
+    total = 0
+    while True:
+        chunk = file_obj.read(chunk_size)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Uploaded file exceeds maximum allowed limit of {max_size // (1024 * 1024)} MB.",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _normalize_phone(phone: Optional[str]) -> Optional[str]:
@@ -98,6 +169,7 @@ def _clear_auth_cookie(response: Response):
 def _check_otp_cooldown(phone: str):
     """Enforce 60-second cooldown between OTP requests to prevent brute-force cycling."""
     now = time.time()
+    _prune_auth_in_memory_stores(now)
     if _redis_client:
         cooldown_key = f"otp_cooldown:{phone}"
         last_req = _redis_client.get(cooldown_key)
@@ -121,6 +193,7 @@ def _check_otp_cooldown(phone: str):
 
 def _check_rate_limit(phone: str):
     now = time.time()
+    _prune_auth_in_memory_stores(now)
     if _redis_client:
         rate_key = f"otp_rate:{phone}"
         requests = _redis_client.incr(rate_key)
@@ -149,6 +222,7 @@ def _check_rate_limit(phone: str):
 
 def _check_login_rate_limit(email: str):
     now = time.time()
+    _prune_auth_in_memory_stores(now)
     clean_email = email.strip().lower()
     entry = _local_login_attempts.get(clean_email)
     if entry:
@@ -163,6 +237,7 @@ def _check_login_rate_limit(email: str):
 
 def _record_login_failure(email: str):
     now = time.time()
+    _prune_auth_in_memory_stores(now)
     clean_email = email.strip().lower()
     entry = _local_login_attempts.setdefault(clean_email, {"failures": 0, "first_failure": now, "lockout_until": 0})
     if now - entry.get("first_failure", 0) > 300:
@@ -182,6 +257,7 @@ def _record_login_success(email: str):
 
 def _store_otp(phone: str, otp: str):
     now = time.time()
+    _prune_auth_in_memory_stores(now)
     if _redis_client:
         _redis_client.setex(f"otp:{phone}", 300, otp)  # 5 min TTL
     else:
@@ -426,10 +502,7 @@ def upload_avatar(file: UploadFile = File(...), user: User = Depends(get_current
             detail=f"Invalid MIME type '{file.content_type}'. Allowed: image/jpeg, image/png, image/webp",
         )
 
-    content = file.file.read(MAX_AVATAR_SIZE + 1)
-    if len(content) > MAX_AVATAR_SIZE:
-        raise HTTPException(status_code=413, detail="Avatar image too large. Max 3 MB.")
-
+    content = _read_bounded_upload(file.file, MAX_AVATAR_SIZE)
     if not _validate_image_bytes(content, ext):
         raise HTTPException(status_code=400, detail="Corrupt or invalid image format.")
 

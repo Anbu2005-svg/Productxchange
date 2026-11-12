@@ -1,10 +1,14 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func, Text, Index
 
 from app.core.database import Base
 
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notifications_user_created", "user_id", "created_at"),
+        Index("ix_notifications_user_read", "user_id", "is_read"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

@@ -34,11 +34,30 @@ def _is_deal_confirmed(product_id: int, user_id: int, db: Session) -> bool:
     return deal is not None
 
 
+def _read_bounded_upload(file_obj, max_size: int, chunk_size: int = 65536) -> bytes:
+    """Streams file upload in bounded chunks to prevent heap exhaustion attacks."""
+    chunks = []
+    total = 0
+    while True:
+        chunk = file_obj.read(chunk_size)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Uploaded file exceeds maximum allowed limit of {max_size // (1024 * 1024)} MB.",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _sanitize_product_out(
     product: Product,
     current_user: Optional[User],
     db: Session,
-    distance_m: Optional[float] = None
+    distance_m: Optional[float] = None,
+    saved_ids: Optional[set[int]] = None,
 ) -> ProductOut:
     out = ProductOut.model_validate(product)
 
@@ -94,13 +113,16 @@ def _sanitize_product_out(
         out.is_expired = False
         out.can_bump = is_seller
 
-    # Check if saved to watchlist by current student
+    # Check if saved to watchlist by current student (O(1) in-memory check if batch-fetched)
     if current_user:
-        from app.models.product import SavedProduct
-        out.is_saved = db.query(SavedProduct.id).filter(
-            SavedProduct.user_id == current_user.id,
-            SavedProduct.product_id == product.id
-        ).first() is not None
+        if saved_ids is not None:
+            out.is_saved = product.id in saved_ids
+        else:
+            from app.models.product import SavedProduct
+            out.is_saved = db.query(SavedProduct.id).filter(
+                SavedProduct.user_id == current_user.id,
+                SavedProduct.product_id == product.id
+            ).first() is not None
     else:
         out.is_saved = False
 
@@ -210,8 +232,20 @@ def list_products(
     products = query.order_by(Product.created_at.desc()).offset(skip).limit(limit + 1).all()
     has_more = len(products) > limit
     items = products[:limit]
+
+    # Batch-fetch watchlist states to eliminate N+1 query overhead for 5M user concurrency
+    saved_ids = set()
+    if user and items:
+        from app.models.product import SavedProduct
+        saved_ids = {
+            row[0] for row in db.query(SavedProduct.product_id).filter(
+                SavedProduct.user_id == user.id,
+                SavedProduct.product_id.in_([p.id for p in items])
+            ).all()
+        }
+
     return {
-        "items": [_sanitize_product_out(p, user, db) for p in items],
+        "items": [_sanitize_product_out(p, user, db, saved_ids=saved_ids) for p in items],
         "has_more": has_more,
         "total_count": total_count,
     }
@@ -282,9 +316,19 @@ def nearby_products(
 
     rows = query.offset(offset).limit(limit).all()
 
+    saved_ids = set()
+    if user and rows:
+        from app.models.product import SavedProduct
+        saved_ids = {
+            row[0] for row in db.query(SavedProduct.product_id).filter(
+                SavedProduct.user_id == user.id,
+                SavedProduct.product_id.in_([p[0].id for p in rows])
+            ).all()
+        }
+
     results = []
     for product, distance_m in rows:
-        results.append(_sanitize_product_out(product, user, db, distance_m=distance_m))
+        results.append(_sanitize_product_out(product, user, db, distance_m=distance_m, saved_ids=saved_ids))
 
     response.headers["X-Total-Count"] = str(len(results))
     return results
@@ -371,7 +415,17 @@ def recommended_products(
     else:
         products = query.order_by(Product.created_at.desc()).limit(6).all()
 
-    return [_sanitize_product_out(p, user, db) for p in products]
+    saved_ids = set()
+    if user and products:
+        from app.models.product import SavedProduct
+        saved_ids = {
+            row[0] for row in db.query(SavedProduct.product_id).filter(
+                SavedProduct.user_id == user.id,
+                SavedProduct.product_id.in_([p.id for p in products])
+            ).all()
+        }
+
+    return [_sanitize_product_out(p, user, db, saved_ids=saved_ids) for p in products]
 
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -700,10 +754,7 @@ def upload_image(
             detail=f"Invalid MIME type '{file.content_type}'. Allowed types: image/jpeg, image/png, image/webp",
         )
 
-    content = file.file.read(MAX_IMAGE_SIZE + 1)
-    if len(content) > MAX_IMAGE_SIZE:
-        raise HTTPException(status_code=413, detail="File too large. Maximum file size is 5 MB.")
-
+    content = _read_bounded_upload(file.file, MAX_IMAGE_SIZE)
     if not _validate_image_bytes(content, ext):
         raise HTTPException(status_code=400, detail="Invalid image content or corrupt file headers.")
 

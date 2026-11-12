@@ -17,10 +17,17 @@ class ConnectionManager:
 
     async def connect_chat(self, conversation_id: int, websocket: WebSocket):
         await websocket.accept()
-        if conversation_id not in self.chat_connections:
-            self.chat_connections[conversation_id] = set()
-        self.chat_connections[conversation_id].add(websocket)
-        logger.info(f"WebSocket connected to chat {conversation_id}. Total: {len(self.chat_connections[conversation_id])}")
+        conns = self.chat_connections.setdefault(conversation_id, set())
+        # Evict oldest socket if connection count exceeds limit (prevents FD starvation)
+        if len(conns) >= 10:
+            oldest = next(iter(conns))
+            try:
+                await oldest.close(code=1000)
+            except Exception:
+                pass
+            conns.discard(oldest)
+        conns.add(websocket)
+        logger.info(f"WebSocket connected to chat {conversation_id}. Total: {len(conns)}")
 
     def disconnect_chat(self, conversation_id: int, websocket: WebSocket):
         if conversation_id in self.chat_connections:
@@ -48,10 +55,17 @@ class ConnectionManager:
 
     async def connect_user(self, user_id: int, websocket: WebSocket):
         await websocket.accept()
-        if user_id not in self.user_connections:
-            self.user_connections[user_id] = set()
-        self.user_connections[user_id].add(websocket)
-        logger.info(f"User {user_id} connected to notification WebSocket.")
+        conns = self.user_connections.setdefault(user_id, set())
+        # Evict oldest notification socket if client opens > 10 connections
+        if len(conns) >= 10:
+            oldest = next(iter(conns))
+            try:
+                await oldest.close(code=1000)
+            except Exception:
+                pass
+            conns.discard(oldest)
+        conns.add(websocket)
+        logger.info(f"User {user_id} connected to notification WebSocket. Total: {len(conns)}")
 
     def disconnect_user(self, user_id: int, websocket: WebSocket):
         if user_id in self.user_connections:

@@ -16,15 +16,16 @@ except Exception:
 
 _local_rate_store: dict[str, list[float]] = {}
 _last_cleanup: float = 0.0
+MAX_RATE_STORE_SIZE = 50000
 
 # Set of IPs considered trusted reverse proxies (e.g. Nginx, local Docker network)
 TRUSTED_PROXIES = {"127.0.0.1", "::1", "localhost", "testclient"}
 
 
 def _prune_expired_rate_store(now: float):
-    """Periodically prune expired keys to prevent memory leaks."""
+    """Periodically prune expired keys and enforce hard memory bounds for 5M concurrent scale."""
     global _last_cleanup
-    if now - _last_cleanup < 60.0 and len(_local_rate_store) < 5000:
+    if now - _last_cleanup < 30.0 and len(_local_rate_store) < 10000:
         return
     _last_cleanup = now
     stale_keys = [
@@ -33,6 +34,17 @@ def _prune_expired_rate_store(now: float):
     ]
     for k in stale_keys:
         _local_rate_store.pop(k, None)
+
+    # Hard ceiling defense against algorithmic memory exhaustion / OOM
+    if len(_local_rate_store) > MAX_RATE_STORE_SIZE:
+        excess = len(_local_rate_store) - int(MAX_RATE_STORE_SIZE * 0.8)
+        # Evict keys with the oldest activity timestamps
+        oldest_keys = sorted(
+            _local_rate_store.keys(),
+            key=lambda k: _local_rate_store[k][-1] if _local_rate_store[k] else 0.0,
+        )[:excess]
+        for k in oldest_keys:
+            _local_rate_store.pop(k, None)
 
 
 def get_client_ip(request: Request) -> str:

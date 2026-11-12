@@ -29,17 +29,26 @@ except Exception:
 
 _local_revoked_tokens: dict[str, float] = {}
 _last_token_prune: float = 0.0
+MAX_REVOKED_TOKENS_SIZE = 50000
 
 
 def _prune_expired_revoked_tokens(now: float):
-    """Periodically purge expired revoked tokens from in-memory blacklist."""
+    """Periodically purge expired revoked tokens from in-memory blacklist with hard memory caps."""
     global _last_token_prune
-    if now - _last_token_prune < 300.0 and len(_local_revoked_tokens) < 1000:
+    if now - _last_token_prune < 60.0 and len(_local_revoked_tokens) < 5000:
         return
     _last_token_prune = now
     expired = [t for t, exp in _local_revoked_tokens.items() if now > exp]
     for t in expired:
         _local_revoked_tokens.pop(t, None)
+
+    # Hard ceiling defense against token flooding attacks
+    if len(_local_revoked_tokens) > MAX_REVOKED_TOKENS_SIZE:
+        excess = len(_local_revoked_tokens) - int(MAX_REVOKED_TOKENS_SIZE * 0.8)
+        # Evict earliest expiring tokens
+        oldest_tokens = sorted(_local_revoked_tokens.items(), key=lambda item: item[1])[:excess]
+        for t, _ in oldest_tokens:
+            _local_revoked_tokens.pop(t, None)
 
 
 def revoke_token(token: str):
