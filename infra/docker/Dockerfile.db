@@ -1,0 +1,9 @@
+FROM postgis/postgis:16-3.4
+
+# Install pgvector extension alongside postgis from official PostgreSQL repository
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends postgresql-16-pgvector && \
+    rm -rf /var/lib/apt/lists/*
+
+# Pre-load extensions into default database upon first initialization
+COPY infra/docker/init-extensions.sql /docker-entrypoint-initdb.d/01-init-extensions.sql
