@@ -4,6 +4,24 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, getToken, resolveImageUrl, API_BASE } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Badge from "@/components/ui/Badge";
+import {
+  Shield,
+  Users,
+  CheckCircle,
+  Package,
+  ArrowLeftRight,
+  AlertTriangle,
+  Check,
+  Download,
+  GraduationCap,
+  Search,
+  ExternalLink,
+  Ban,
+  Trash2,
+} from "lucide-react";
 
 type Report = {
   id: number;
@@ -69,7 +87,7 @@ export default function AdminPage() {
       setReports(openReports);
       setResolvedReports(closedReports);
     } catch (e: any) {
-      setError(e.message);
+      setError(e.message || "Failed to load admin dashboard");
     } finally {
       setLoading(false);
     }
@@ -110,7 +128,7 @@ export default function AdminPage() {
     setActionLoading(id);
     try {
       await api(`/admin/reports/${id}/resolve`, { method: "POST" });
-      showToast("Report resolved", "success");
+      showToast("Report marked resolved", "success");
       await load();
     } catch (e: any) {
       showToast(e.message, "error");
@@ -120,10 +138,10 @@ export default function AdminPage() {
   }
 
   async function suspendUser(userId: number) {
-    if (!confirm(`Are you sure you want to suspend User #${userId}?`)) return;
+    if (!confirm(`Are you sure you want to suspend student user #${userId}?`)) return;
     try {
       await api(`/admin/users/${userId}/suspend`, { method: "POST" });
-      showToast(`User #${userId} suspended`, "success");
+      showToast(`User #${userId} suspended`, "info");
       await load();
       if (activeTab === "users") loadUsers(userQuery);
     } catch (e: any) {
@@ -143,10 +161,10 @@ export default function AdminPage() {
   }
 
   async function removeListing(productId: number) {
-    if (!confirm(`Remove listing #${productId}?`)) return;
+    if (!confirm(`Remove listing #${productId} permanently?`)) return;
     try {
       await api(`/admin/listings/${productId}/remove`, { method: "POST" });
-      showToast(`Listing #${productId} removed`, "success");
+      showToast(`Listing #${productId} removed`, "info");
       await load();
     } catch (e: any) {
       showToast(e.message, "error");
@@ -168,7 +186,7 @@ export default function AdminPage() {
       a.download = `productxchange_${resource}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast(`📥 ${resource}.csv downloaded successfully!`, "success");
+      showToast(`${resource}.csv downloaded successfully`, "success");
     } catch (e: any) {
       showToast(e.message || "Failed to download CSV", "error");
     }
@@ -176,243 +194,253 @@ export default function AdminPage() {
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto py-8 text-center animate-fade-in">
-        <span className="text-5xl block mb-3">🛡️</span>
-        <h1 className="text-xl font-bold text-ink dark:text-white mb-2">Admin Access Required</h1>
-        <p className="text-sm text-clay">{error}</p>
-        <Link href="/" className="text-sm text-moss dark:text-emerald-400 font-semibold hover:underline mt-4 inline-block">
-          ← Back to home
+      <div className="mx-auto max-w-xl py-12 text-center">
+        <Shield className="mx-auto mb-3 h-8 w-8 text-danger" strokeWidth={1.5} />
+        <h1 className="text-base font-semibold text-text">Admin access required</h1>
+        <p className="mt-1 text-xs text-danger">{error}</p>
+        <Link href="/" className="mt-4 inline-block text-xs font-medium text-primary hover:underline">
+          Return to campus feed
         </Link>
       </div>
     );
   }
 
-  const statCards: { key: string; label: string; icon: string }[] = [
-    { key: "total_users", label: "Total Users", icon: "👥" },
-    { key: "verified_users", label: "Verified", icon: "✅" },
-    { key: "active_listings", label: "Active Listings", icon: "📦" },
-    { key: "total_transactions", label: "Transactions", icon: "🤝" },
-    { key: "open_reports", label: "Open Reports", icon: "⚠️" },
+  const statCards: { key: string; label: string; icon: typeof Users }[] = [
+    { key: "total_users", label: "Total students", icon: Users },
+    { key: "verified_users", label: "Campus verified", icon: CheckCircle },
+    { key: "active_listings", label: "Active listings", icon: Package },
+    { key: "total_transactions", label: "Deals completed", icon: ArrowLeftRight },
+    { key: "open_reports", label: "Open reports", icon: AlertTriangle },
   ];
 
   const totalUsers = stats?.total_users || 1;
   const verifiedUsers = stats?.verified_users || 0;
   const verifiedPercent = Math.min(100, Math.round((verifiedUsers / totalUsers) * 100));
-  const totalReportsCount = (reports.length + resolvedReports.length) || 1;
+  const totalReportsCount = reports.length + resolvedReports.length || 1;
   const resolutionRate = Math.min(100, Math.round((resolvedReports.length / totalReportsCount) * 100));
 
   return (
-    <div className="max-w-4xl mx-auto py-4 animate-fade-in">
-      <div className="flex items-center gap-3 mb-6">
-        <span className="text-3xl">🛡️</span>
+    <div className="mx-auto max-w-5xl py-4 sm:py-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-ink dark:text-white">Admin Dashboard</h1>
-          <p className="text-sm text-ink/60 dark:text-stone-300">Manage users, reports, metrics, and data exports</p>
+          <h1 className="text-xl font-semibold text-text">Campus administration</h1>
+          <p className="mt-0.5 text-xs text-text-secondary">
+            User moderation, trust verification, analytics, and data exports
+          </p>
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stat Tiles */}
       {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-xl p-4 animate-pulse">
-              <div className="h-3 bg-sand dark:bg-stone-800 rounded w-2/3 mb-2" />
-              <div className="h-6 bg-sand dark:bg-stone-800 rounded w-1/2" />
-            </div>
+            <div key={i} className="h-20 rounded-md border border-border bg-surface-muted animate-pulse" />
           ))}
         </div>
       ) : stats ? (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-          {statCards.map((card) => (
-            <div
-              key={card.key}
-              className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-ink/60 dark:text-stone-400 font-medium">{card.label}</span>
-                <span className="text-base">{card.icon}</span>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {statCards.map((card) => {
+            const IconComponent = card.icon;
+            return (
+              <div
+                key={card.key}
+                className="rounded-md border border-border bg-surface p-4"
+              >
+                <div className="flex items-center justify-between text-xs text-text-secondary">
+                  <span className="font-medium">{card.label}</span>
+                  <IconComponent className="h-4 w-4 text-text-tertiary" strokeWidth={1.75} />
+                </div>
+                <p className="mt-2 font-mono text-2xl font-semibold tabular-nums text-text">
+                  {stats[card.key] ?? 0}
+                </p>
               </div>
-              <p className="text-2xl font-bold text-ink dark:text-white">
-                {stats[card.key] ?? 0}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 
-      {/* Visual Analytics Charts & Velocity */}
+      {/* Analytics Ratios */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          {/* User Verification Ratio Chart */}
-          <div className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-5 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-ink/70 dark:text-stone-300 flex items-center gap-1.5">
-                <span>🎓</span> Student Verification Ratio
-              </h3>
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{verifiedPercent}% Verified</span>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-md border border-border bg-surface p-4 space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-text">Campus verification ratio</span>
+              <span className="font-mono tabular-nums text-text-secondary">{verifiedPercent}%</span>
             </div>
-            <div className="w-full bg-sand dark:bg-stone-800 h-3.5 rounded-full overflow-hidden flex">
-              <div style={{ width: `${verifiedPercent}%` }} className="bg-emerald-500 h-full transition-all duration-500" />
-              <div style={{ width: `${100 - verifiedPercent}%` }} className="bg-amber-400 h-full transition-all duration-500" />
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted border border-border">
+              <div
+                style={{ width: `${verifiedPercent}%` }}
+                className="h-full bg-primary transition-all duration-300"
+              />
             </div>
-            <div className="flex justify-between text-[11px] text-ink/50 dark:text-stone-400">
+            <div className="flex justify-between text-[11px] font-mono tabular-nums text-text-tertiary">
               <span>Verified: {verifiedUsers}</span>
               <span>Unverified: {totalUsers - verifiedUsers}</span>
             </div>
           </div>
 
-          {/* Moderation Resolution Velocity */}
-          <div className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-5 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-ink/70 dark:text-stone-300 flex items-center gap-1.5">
-                <span>⚡</span> Moderation Resolution Velocity
-              </h3>
-              <span className="text-xs font-bold text-moss dark:text-emerald-400">{resolutionRate}% Solved</span>
+          <div className="rounded-md border border-border bg-surface p-4 space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-text">Moderation resolution rate</span>
+              <span className="font-mono tabular-nums text-text-secondary">{resolutionRate}%</span>
             </div>
-            <div className="w-full bg-sand dark:bg-stone-800 h-3.5 rounded-full overflow-hidden flex">
-              <div style={{ width: `${resolutionRate}%` }} className="bg-moss dark:bg-emerald-500 h-full transition-all duration-500" />
-              <div style={{ width: `${100 - resolutionRate}%` }} className="bg-rose-500 h-full transition-all duration-500" />
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted border border-border">
+              <div
+                style={{ width: `${resolutionRate}%` }}
+                className="h-full bg-success transition-all duration-300"
+              />
             </div>
-            <div className="flex justify-between text-[11px] text-ink/50 dark:text-stone-400">
+            <div className="flex justify-between text-[11px] font-mono tabular-nums text-text-tertiary">
               <span>Resolved: {resolvedReports.length}</span>
-              <span>Open Pending: {reports.length}</span>
+              <span>Open: {reports.length}</span>
             </div>
           </div>
         </div>
       )}
 
       {/* Admin Tabs */}
-      <div className="flex border-b border-ink/10 dark:border-stone-800 mb-6 gap-2 text-sm overflow-x-auto pb-1">
+      <div className="flex overflow-x-auto border-b border-border text-xs font-medium whitespace-nowrap">
         <button
           onClick={() => setActiveTab("reports")}
-          className={`pb-3 px-3 font-semibold transition-colors border-b-2 shrink-0 flex items-center gap-1.5 ${
-            activeTab === "reports" ? "border-moss text-moss dark:text-emerald-400" : "border-transparent text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 transition-colors ${
+            activeTab === "reports"
+              ? "border-primary text-primary"
+              : "border-transparent text-text-secondary hover:text-text"
           }`}
         >
-          Open Reports
-          {reports.length > 0 && (
-            <span className="bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 text-[11px] font-bold px-1.5 py-0.5 rounded-full">
-              {reports.length}
-            </span>
-          )}
+          <span>Open reports</span>
+          <span className="font-mono tabular-nums text-text-tertiary">({reports.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab("resolved")}
-          className={`pb-3 px-3 font-semibold transition-colors border-b-2 shrink-0 ${
-            activeTab === "resolved" ? "border-moss text-moss dark:text-emerald-400" : "border-transparent text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 transition-colors ${
+            activeTab === "resolved"
+              ? "border-primary text-primary"
+              : "border-transparent text-text-secondary hover:text-text"
           }`}
         >
-          Resolved ({resolvedReports.length})
+          <span>Resolved</span>
+          <span className="font-mono tabular-nums text-text-tertiary">({resolvedReports.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab("users")}
-          className={`pb-3 px-3 font-semibold transition-colors border-b-2 shrink-0 flex items-center gap-1 ${
-            activeTab === "users" ? "border-moss text-moss dark:text-emerald-400" : "border-transparent text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
+          className={`border-b-2 px-4 py-2.5 transition-colors ${
+            activeTab === "users"
+              ? "border-primary text-primary"
+              : "border-transparent text-text-secondary hover:text-text"
           }`}
         >
-          <span>👥</span> User Management
+          User moderation
         </button>
 
         <button
           onClick={() => setActiveTab("breakdown")}
-          className={`pb-3 px-3 font-semibold transition-colors border-b-2 shrink-0 flex items-center gap-1 ${
-            activeTab === "breakdown" ? "border-moss text-moss dark:text-emerald-400" : "border-transparent text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
+          className={`border-b-2 px-4 py-2.5 transition-colors ${
+            activeTab === "breakdown"
+              ? "border-primary text-primary"
+              : "border-transparent text-text-secondary hover:text-text"
           }`}
         >
-          <span>📊</span> Category Breakdown
+          Category breakdown
         </button>
 
         <button
           onClick={() => setActiveTab("exports")}
-          className={`pb-3 px-3 font-semibold transition-colors border-b-2 shrink-0 flex items-center gap-1 ${
-            activeTab === "exports" ? "border-moss text-moss dark:text-emerald-400" : "border-transparent text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
+          className={`border-b-2 px-4 py-2.5 transition-colors ${
+            activeTab === "exports"
+              ? "border-primary text-primary"
+              : "border-transparent text-text-secondary hover:text-text"
           }`}
         >
-          <span>📥</span> Export CSV
+          Data exports
         </button>
       </div>
 
       {/* Tab: Open Reports */}
       {activeTab === "reports" && (
-        <div className="space-y-3 animate-fade-in">
+        <div className="space-y-3">
           {reports.length === 0 ? (
-            <div className="text-center py-12 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl">
-              <span className="text-4xl block mb-2">🎉</span>
-              <h3 className="font-semibold text-ink dark:text-white">No open reports</h3>
-              <p className="text-xs text-ink/50 dark:text-stone-400 mt-1">Everything looks clean!</p>
+            <div className="rounded-md border border-border bg-surface p-8 text-center text-xs text-text-secondary">
+              No open reports pending moderation.
             </div>
           ) : (
             reports.map((r) => (
               <div
                 key={r.id}
-                className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-xl p-5 shadow-sm"
+                className="rounded-md border border-border bg-surface p-4 text-xs"
               >
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-bold text-red-700 bg-red-100 dark:bg-red-950/40 dark:text-red-300 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-800">
-                        ⚠️ {r.reason}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded bg-danger-subtle px-2 py-0.5 font-medium text-danger">
+                        {r.reason}
                       </span>
-                      <span className="text-[11px] text-ink/40 dark:text-stone-400">
-                        #{r.id} · {new Date(r.created_at).toLocaleDateString()}
+                      <span className="font-mono text-text-tertiary">
+                        #{r.id} • {new Date(r.created_at).toLocaleDateString("en-IN")}
                       </span>
                     </div>
 
                     {r.details && (
-                      <p className="text-sm text-ink/80 dark:text-stone-300 mb-3 bg-sand/30 dark:bg-stone-800/40 p-2.5 rounded-lg">
+                      <p className="rounded border border-border bg-surface-muted p-2.5 text-text">
                         {r.details}
                       </p>
                     )}
 
-                    <div className="flex flex-wrap gap-2 text-xs">
+                    <div className="flex flex-wrap gap-3 text-text-secondary">
                       {r.reported_user_id && (
-                        <span className="text-ink/60 dark:text-stone-400">
-                          Reported User: <strong>#{r.reported_user_id}</strong>
+                        <span>
+                          Reported user: <strong className="text-text">#{r.reported_user_id}</strong>
                         </span>
                       )}
                       {r.reported_product_id && (
-                        <span className="text-ink/60 dark:text-stone-400">
-                          Reported Listing:{" "}
+                        <span>
+                          Reported listing:{" "}
                           <Link
                             href={`/listings/${r.reported_product_id}`}
-                            className="text-moss dark:text-emerald-400 underline font-semibold"
+                            className="font-medium text-primary hover:underline"
                           >
                             #{r.reported_product_id}
                           </Link>
                         </span>
                       )}
-                      <span className="text-ink/40 dark:text-stone-500">
-                        By User #{r.reporter_id}
-                      </span>
+                      <span className="text-text-tertiary">Reporter: #{r.reporter_id}</span>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex sm:flex-col gap-2 shrink-0">
-                    <button
-                      onClick={() => resolveReport(r.id)}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
                       disabled={actionLoading === r.id}
-                      className="text-xs bg-emerald-600 text-white font-semibold px-3 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                      onClick={() => resolveReport(r.id)}
                     >
-                      {actionLoading === r.id ? "Resolving…" : "✓ Resolve"}
-                    </button>
+                      <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                      <span>{actionLoading === r.id ? "Resolving..." : "Resolve"}</span>
+                    </Button>
+
                     {r.reported_user_id && (
-                      <button
+                      <Button
+                        variant="destructive"
+                        size="sm"
                         onClick={() => suspendUser(r.reported_user_id!)}
-                        className="text-xs text-red-600 hover:text-red-800 font-semibold px-2 py-1 rounded transition-colors"
                       >
-                        Suspend User
-                      </button>
+                        <Ban className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        <span>Suspend</span>
+                      </Button>
                     )}
+
                     {r.reported_product_id && (
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => removeListing(r.reported_product_id!)}
-                        className="text-xs text-clay hover:text-red-800 font-semibold px-2 py-1 rounded transition-colors"
                       >
-                        Remove Item
-                      </button>
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        <span>Remove item</span>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -424,30 +452,26 @@ export default function AdminPage() {
 
       {/* Tab: Resolved Reports */}
       {activeTab === "resolved" && (
-        <div className="space-y-3 animate-fade-in">
+        <div className="space-y-2">
           {resolvedReports.length === 0 ? (
-            <div className="text-center py-12 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl">
-              <p className="text-sm text-ink/50 dark:text-stone-400">No resolved reports yet</p>
+            <div className="rounded-md border border-border bg-surface p-8 text-center text-xs text-text-secondary">
+              No resolved reports in history.
             </div>
           ) : (
             resolvedReports.map((r) => (
               <div
                 key={r.id}
-                className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-xl p-4 opacity-75"
+                className="flex items-center justify-between rounded-md border border-border bg-surface p-3 text-xs"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-semibold text-ink/60 dark:text-stone-400">
-                      #{r.id} · {r.reason}
-                    </span>
-                    {r.details && (
-                      <p className="text-xs text-ink/50 dark:text-stone-400 mt-1">{r.details}</p>
-                    )}
-                  </div>
-                  <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
-                    Resolved
+                <div>
+                  <span className="font-medium text-text">
+                    #{r.id} • {r.reason}
                   </span>
+                  {r.details && (
+                    <p className="mt-0.5 text-text-secondary truncate max-w-md">{r.details}</p>
+                  )}
                 </div>
+                <span className="font-medium text-success">Resolved</span>
               </div>
             ))
           )}
@@ -456,92 +480,94 @@ export default function AdminPage() {
 
       {/* Tab: User Management */}
       {activeTab === "users" && (
-        <div className="space-y-4 animate-fade-in">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Search users by name, email, or college…"
+        <div className="space-y-4">
+          <div>
+            <Input
+              placeholder="Search by student name, email, or college..."
               value={userQuery}
               onChange={(e) => {
                 setUserQuery(e.target.value);
                 loadUsers(e.target.value);
               }}
-              className="flex-1 border border-ink/20 dark:border-stone-700 rounded-xl px-4 py-2.5 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
             />
           </div>
 
           {loadingUsers ? (
-            <div className="text-center py-12 animate-pulse text-xs text-ink/50 dark:text-stone-400">Loading student directory…</div>
+            <div className="py-8 text-center text-xs text-text-secondary">
+              Searching student directory...
+            </div>
           ) : (
-            <div className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-sand/60 dark:bg-stone-800/60 border-b border-ink/10 dark:border-stone-700 text-ink/70 dark:text-stone-300">
-                    <tr>
-                      <th className="p-3">User</th>
-                      <th className="p-3">College</th>
-                      <th className="p-3">Status</th>
-                      <th className="p-3">Rating</th>
-                      <th className="p-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-ink/5 dark:divide-stone-800 text-ink dark:text-stone-200">
-                    {users.map((u) => (
-                      <tr key={u.id} className="hover:bg-sand/20 dark:hover:bg-stone-800/30">
-                        <td className="p-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-sand dark:bg-stone-800 flex items-center justify-center font-bold text-[11px] text-moss border border-moss/20 overflow-hidden">
-                              {u.avatar_url ? (
-                                <img src={resolveImageUrl(u.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
-                              ) : (
-                                u.full_name?.charAt(0) || u.email.charAt(0).toUpperCase()
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-semibold">{u.full_name || "Student"}</p>
-                              <p className="text-[11px] text-ink/50 dark:text-stone-400">{u.email}</p>
-                            </div>
+            <div className="overflow-x-auto rounded-md border border-border bg-surface">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-border bg-surface-muted text-text-secondary font-medium">
+                  <tr>
+                    <th className="p-3">Student</th>
+                    <th className="p-3">College</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3">Rating</th>
+                    <th className="p-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-surface-muted/50">
+                      <td className="p-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-surface-muted text-xs font-medium text-text">
+                            {u.avatar_url ? (
+                              <img src={resolveImageUrl(u.avatar_url)} alt="Avatar" className="h-full w-full object-cover" />
+                            ) : (
+                              u.full_name?.charAt(0) || u.email.charAt(0).toUpperCase()
+                            )}
                           </div>
-                        </td>
-                        <td className="p-3 text-ink/70 dark:text-stone-300">{u.college || "—"}</td>
-                        <td className="p-3">
-                          {u.is_blocked_flag ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
-                              Suspended
-                            </span>
-                          ) : u.is_verified ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                              Verified
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 dark:bg-stone-800 dark:text-stone-300">
-                              Standard
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3">★ {u.avg_rating.toFixed(1)} ({u.rating_count})</td>
-                        <td className="p-3 text-right">
-                          {u.is_blocked_flag ? (
-                            <button
-                              onClick={() => unsuspendUser(u.id)}
-                              className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
-                            >
-                              Reinstate
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => suspendUser(u.id)}
-                              className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline"
-                            >
-                              Suspend
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          <div>
+                            <div className="font-semibold text-text">{u.full_name || "Student"}</div>
+                            <div className="font-mono text-[11px] text-text-tertiary">{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3 text-text-secondary">{u.college || "—"}</td>
+                      <td className="p-3">
+                        {u.is_blocked_flag ? (
+                          <span className="rounded bg-danger-subtle px-1.5 py-0.5 text-[10px] font-medium text-danger">
+                            Suspended
+                          </span>
+                        ) : u.is_verified ? (
+                          <span className="rounded bg-success-subtle px-1.5 py-0.5 text-[10px] font-medium text-success">
+                            Verified
+                          </span>
+                        ) : (
+                          <span className="rounded bg-surface-muted px-1.5 py-0.5 text-[10px] text-text-tertiary">
+                            Standard
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 font-mono tabular-nums">
+                        ★ {u.avg_rating.toFixed(1)} ({u.rating_count})
+                      </td>
+                      <td className="p-3 text-right">
+                        {u.is_blocked_flag ? (
+                          <button
+                            type="button"
+                            onClick={() => unsuspendUser(u.id)}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            Reinstate
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => suspendUser(u.id)}
+                            className="font-medium text-danger hover:underline"
+                          >
+                            Suspend
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -549,23 +575,28 @@ export default function AdminPage() {
 
       {/* Tab: Analytics Breakdown */}
       {activeTab === "breakdown" && (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-4">
           {breakdown ? (
             <>
-              {/* Category Breakdown */}
-              <div className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-sm font-bold text-ink dark:text-white mb-4">Listings by Category</h3>
-                <div className="space-y-3">
+              <div className="rounded-md border border-border bg-surface p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-text mb-3">
+                  Listings by category
+                </h3>
+                <div className="space-y-2.5">
                   {breakdown.categories.map((c) => (
-                    <div key={c.category} className="space-y-1">
-                      <div className="flex justify-between text-xs font-medium">
-                        <span className="text-ink dark:text-stone-200">{c.category}</span>
-                        <span className="text-ink/60 dark:text-stone-400">{c.count} items</span>
+                    <div key={c.category} className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-text">{c.category}</span>
+                        <span className="font-mono tabular-nums text-text-secondary">
+                          {c.count} items
+                        </span>
                       </div>
-                      <div className="w-full bg-sand dark:bg-stone-800 h-2 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted border border-border">
                         <div
-                          style={{ width: `${Math.min(100, (c.count / (stats?.active_listings || 1)) * 100)}%` }}
-                          className="bg-moss dark:bg-emerald-500 h-full rounded-full"
+                          style={{
+                            width: `${Math.min(100, (c.count / (stats?.active_listings || 1)) * 100)}%`,
+                          }}
+                          className="h-full bg-primary"
                         />
                       </div>
                     </div>
@@ -573,102 +604,86 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Transaction States Breakdown */}
-              <div className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-sm font-bold text-ink dark:text-white mb-4">Transactions by Lifecycle State</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="rounded-md border border-border bg-surface p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-text mb-3">
+                  Transactions by stage
+                </h3>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {breakdown.transaction_states.map((s) => (
-                    <div key={s.state} className="p-3 rounded-xl bg-sand/40 dark:bg-stone-800/40 border border-ink/5 dark:border-stone-700">
-                      <p className="text-[11px] font-semibold text-ink/60 dark:text-stone-400 uppercase">{s.state}</p>
-                      <p className="text-xl font-bold text-ink dark:text-white mt-0.5">{s.count}</p>
+                    <div
+                      key={s.state}
+                      className="rounded border border-border bg-surface-muted p-3 text-xs"
+                    >
+                      <div className="text-[11px] text-text-tertiary uppercase">{s.state}</div>
+                      <div className="mt-1 font-mono text-lg font-semibold tabular-nums text-text">
+                        {s.count}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             </>
           ) : (
-            <div className="text-center py-12 animate-pulse text-xs text-ink/50 dark:text-stone-400">Loading breakdown data…</div>
+            <div className="py-8 text-center text-xs text-text-secondary">
+              Loading category breakdown...
+            </div>
           )}
         </div>
       )}
 
       {/* Tab: Data Exports */}
       {activeTab === "exports" && (
-        <div className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-6 sm:p-8 shadow-sm animate-fade-in space-y-6">
-          <div>
-            <h3 className="text-base font-bold text-ink dark:text-white mb-1">Export Database Records</h3>
-            <p className="text-xs text-ink/60 dark:text-stone-400">
-              Download complete comma-separated value (CSV) reports for external audit, accreditation, or reporting.
+        <div className="space-y-4">
+          <div className="rounded-md border border-border bg-surface p-5">
+            <h3 className="text-sm font-semibold text-text">Database CSV exports</h3>
+            <p className="mt-0.5 text-xs text-text-secondary">
+              Download comma-separated audit files for institutional compliance or analysis
             </p>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl border border-ink/10 dark:border-stone-700 bg-sand/30 dark:bg-stone-800/40 flex flex-col justify-between">
-              <div>
-                <p className="text-sm font-bold text-ink dark:text-white flex items-center gap-1.5">
-                  <span>👥</span> Users Directory
-                </p>
-                <p className="text-xs text-ink/60 dark:text-stone-400 mt-1">
-                  All student profiles, verified flags, colleges, and trust ratings.
-                </p>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex items-center justify-between rounded border border-border bg-surface-muted p-3 text-xs">
+                <div>
+                  <div className="font-semibold text-text">Students directory</div>
+                  <div className="text-text-tertiary">users.csv</div>
+                </div>
+                <Button variant="secondary" size="sm" onClick={() => downloadCsv("users")}>
+                  <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  <span>Export</span>
+                </Button>
               </div>
-              <button
-                onClick={() => downloadCsv("users")}
-                className="mt-4 text-xs font-semibold px-3 py-2 rounded-lg bg-moss text-white hover:bg-moss/90 transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
-              >
-                <span>📥</span> Download users.csv
-              </button>
-            </div>
 
-            <div className="p-4 rounded-xl border border-ink/10 dark:border-stone-700 bg-sand/30 dark:bg-stone-800/40 flex flex-col justify-between">
-              <div>
-                <p className="text-sm font-bold text-ink dark:text-white flex items-center gap-1.5">
-                  <span>📦</span> Marketplace Listings
-                </p>
-                <p className="text-xs text-ink/60 dark:text-stone-400 mt-1">
-                  Active, completed, and removed items with prices and categories.
-                </p>
+              <div className="flex items-center justify-between rounded border border-border bg-surface-muted p-3 text-xs">
+                <div>
+                  <div className="font-semibold text-text">Marketplace listings</div>
+                  <div className="text-text-tertiary">products.csv</div>
+                </div>
+                <Button variant="secondary" size="sm" onClick={() => downloadCsv("products")}>
+                  <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  <span>Export</span>
+                </Button>
               </div>
-              <button
-                onClick={() => downloadCsv("products")}
-                className="mt-4 text-xs font-semibold px-3 py-2 rounded-lg bg-moss text-white hover:bg-moss/90 transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
-              >
-                <span>📥</span> Download products.csv
-              </button>
-            </div>
 
-            <div className="p-4 rounded-xl border border-ink/10 dark:border-stone-700 bg-sand/30 dark:bg-stone-800/40 flex flex-col justify-between">
-              <div>
-                <p className="text-sm font-bold text-ink dark:text-white flex items-center gap-1.5">
-                  <span>🤝</span> Campus Transactions
-                </p>
-                <p className="text-xs text-ink/60 dark:text-stone-400 mt-1">
-                  All transactions with buyer/seller IDs, agreed prices, and timestamps.
-                </p>
+              <div className="flex items-center justify-between rounded border border-border bg-surface-muted p-3 text-xs">
+                <div>
+                  <div className="font-semibold text-text">Handshakes & deals</div>
+                  <div className="text-text-tertiary">transactions.csv</div>
+                </div>
+                <Button variant="secondary" size="sm" onClick={() => downloadCsv("transactions")}>
+                  <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  <span>Export</span>
+                </Button>
               </div>
-              <button
-                onClick={() => downloadCsv("transactions")}
-                className="mt-4 text-xs font-semibold px-3 py-2 rounded-lg bg-moss text-white hover:bg-moss/90 transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
-              >
-                <span>📥</span> Download transactions.csv
-              </button>
-            </div>
 
-            <div className="p-4 rounded-xl border border-ink/10 dark:border-stone-700 bg-sand/30 dark:bg-stone-800/40 flex flex-col justify-between">
-              <div>
-                <p className="text-sm font-bold text-ink dark:text-white flex items-center gap-1.5">
-                  <span>⚠️</span> Moderation Reports
-                </p>
-                <p className="text-xs text-ink/60 dark:text-stone-400 mt-1">
-                  Report history with reporter ID, flagged content, reasons, and status.
-                </p>
+              <div className="flex items-center justify-between rounded border border-border bg-surface-muted p-3 text-xs">
+                <div>
+                  <div className="font-semibold text-text">Moderation reports</div>
+                  <div className="text-text-tertiary">reports.csv</div>
+                </div>
+                <Button variant="secondary" size="sm" onClick={() => downloadCsv("reports")}>
+                  <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  <span>Export</span>
+                </Button>
               </div>
-              <button
-                onClick={() => downloadCsv("reports")}
-                className="mt-4 text-xs font-semibold px-3 py-2 rounded-lg bg-moss text-white hover:bg-moss/90 transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
-              >
-                <span>📥</span> Download reports.csv
-              </button>
             </div>
           </div>
         </div>

@@ -3,9 +3,32 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, Product, resolveImageUrl, uploadProductImage, uploadProductImageWithAngle, convertProductTo3D } from "@/lib/api";
-import MultiAnglePhotoStudio, { AngleData, AnglePreviews } from "@/components/MultiAnglePhotoStudio";
+import {
+  api,
+  Product,
+  resolveImageUrl,
+  uploadProductImage,
+  uploadProductImageWithAngle,
+  convertProductTo3D,
+} from "@/lib/api";
+import MultiAnglePhotoStudio, {
+  AngleData,
+  AnglePreviews,
+} from "@/components/MultiAnglePhotoStudio";
 import { useToast } from "@/components/Toast";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
+import {
+  ArrowLeft,
+  Camera,
+  Layers,
+  Upload,
+  X,
+  AlertCircle,
+  Save,
+  Check,
+} from "lucide-react";
 
 const CATEGORIES = [
   "Textbooks & Study Material",
@@ -77,9 +100,10 @@ export default function EditListingPage() {
 
         if (product.image_angles) {
           try {
-            const rawAngles = typeof product.image_angles === "string" 
-              ? JSON.parse(product.image_angles) 
-              : product.image_angles;
+            const rawAngles =
+              typeof product.image_angles === "string"
+                ? JSON.parse(product.image_angles)
+                : product.image_angles;
             const resolved: AnglePreviews = {};
             for (const [k, v] of Object.entries(rawAngles)) {
               if (v) resolved[k as keyof AnglePreviews] = resolveImageUrl(v as string);
@@ -131,7 +155,6 @@ export default function EditListingPage() {
     setSubmitting(true);
 
     try {
-      // 1. Update listing metadata
       const payload: Record<string, any> = {
         title: form.title.trim(),
         description: form.description.trim() || null,
@@ -150,7 +173,6 @@ export default function EditListingPage() {
         body: JSON.stringify(payload),
       });
 
-      // 2. Upload 3D angle images
       const angleEntries = Object.entries(angleFiles).filter(([_, f]) => Boolean(f)) as [string, File][];
       if (angleEntries.length > 0) {
         setUploadingImage(true);
@@ -170,7 +192,6 @@ export default function EditListingPage() {
         } catch {}
       }
 
-      // 3. Upload any newly selected classic images
       if (newFiles.length > 0) {
         setUploadingImage(true);
         for (const file of newFiles) {
@@ -178,7 +199,7 @@ export default function EditListingPage() {
         }
       }
 
-      showToast("✅ Listing updated successfully!", "success");
+      showToast("Listing updated successfully", "success");
       router.push(`/listings/${id}`);
     } catch (e: any) {
       setError(e.message || "Failed to update listing.");
@@ -191,225 +212,226 @@ export default function EditListingPage() {
 
   if (loading) {
     return (
-      <div className="max-w-xl mx-auto py-16 text-center text-ink/60 dark:text-stone-400">
-        <div className="animate-pulse">Loading listing details…</div>
+      <div className="mx-auto max-w-xl py-16 text-center text-xs text-text-secondary">
+        Loading listing details...
       </div>
     );
   }
 
   if (error && !form.title) {
     return (
-      <div className="max-w-xl mx-auto py-12 text-center animate-fade-in">
-        <p className="text-clay text-base font-semibold mb-3">{error}</p>
-        <Link href={`/listings/${id}`} className="text-sm text-moss dark:text-emerald-400 hover:underline">
-          ← Return to listing
+      <div className="mx-auto max-w-xl py-12 text-center">
+        <p className="mb-3 text-sm font-medium text-danger">{error}</p>
+        <Link href={`/listings/${id}`} className="text-xs text-primary hover:underline">
+          Return to listing
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="max-w-xl mx-auto py-6 animate-fade-in">
+    <div className="mx-auto max-w-2xl py-4 sm:py-6">
       <div className="mb-6 flex items-center justify-between">
-        <Link href={`/listings/${id}`} className="text-xs text-ink/60 dark:text-stone-400 hover:text-moss dark:hover:text-emerald-400">
-          ← Cancel and return
+        <Link
+          href={`/listings/${id}`}
+          className="inline-flex items-center gap-1.5 text-xs text-text-secondary hover:text-text"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <span>Back to listing</span>
         </Link>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-sand dark:bg-stone-800 text-ink/70 dark:text-stone-300 border border-ink/10 dark:border-stone-700">
-          Edit Listing #{id}
+        <span className="font-mono text-xs tabular-nums text-text-tertiary">
+          Listing #{id}
         </span>
       </div>
 
-      <div className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-6 sm:p-8 shadow-sm transition-colors">
-        <h1 className="text-xl font-bold text-ink dark:text-white mb-1">Edit Item Details</h1>
-        <p className="text-xs text-ink/60 dark:text-stone-400 mb-6">
-          Update item price, condition description, or add clearer photos for campus buyers.
+      <div className="rounded-lg border border-border bg-surface p-5 sm:p-6">
+        <h1 className="text-xl font-semibold text-text">Edit listing</h1>
+        <p className="mt-1 text-xs text-text-secondary">
+          Update price, condition, or upload revised photos
         </p>
 
         {error && (
-          <div className="mb-6 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs text-clay dark:text-red-300 font-medium">
-            {error}
+          <div className="mt-4 flex items-start gap-2 rounded-md border border-danger/20 bg-danger-subtle p-3 text-xs text-danger">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={1.75} />
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Title */}
+        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
           <div>
-            <label className="block text-xs font-semibold text-ink dark:text-stone-200 mb-1.5">
-              Title <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
+            <Input
+              label="Item title"
               required
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="w-full border border-ink/20 dark:border-stone-700 rounded-xl px-3.5 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
             />
           </div>
 
-          {/* Category & Condition */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-semibold text-ink dark:text-stone-200 mb-1.5">
-                Category <span className="text-red-500">*</span>
+              <label className="mb-1.5 block text-xs font-medium text-text">
+                Category <span className="text-danger">*</span>
               </label>
-              <select
+              <Select
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
-                className="w-full border border-ink/20 dark:border-stone-700 rounded-xl px-3 py-2.5 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
               >
                 {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-ink dark:text-stone-200 mb-1.5">
+              <label className="mb-1.5 block text-xs font-medium text-text">
                 Condition
               </label>
-              <select
+              <Select
                 value={form.condition}
                 onChange={(e) => setForm({ ...form, condition: e.target.value })}
-                className="w-full border border-ink/20 dark:border-stone-700 rounded-xl px-3 py-2.5 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
               >
                 {CONDITIONS.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
-          {/* Price */}
           <div>
-            <label className="block text-xs font-semibold text-ink dark:text-stone-200 mb-1.5">
-              Price (₹)
-            </label>
-            <div className="relative">
-              <span className="absolute left-3.5 top-2.5 text-sm text-ink/40 dark:text-stone-500 font-bold">₹</span>
-              <input
-                type="number"
-                min="0"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
-                className="w-full border border-ink/20 dark:border-stone-700 rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800 font-semibold focus:outline-none focus:border-moss"
-              />
-            </div>
+            <Input
+              label="Price (₹)"
+              type="number"
+              min="0"
+              value={form.price}
+              onChange={(e) => setForm({ ...form, price: e.target.value })}
+              helperText={
+                form.price
+                  ? `Formatted: ₹${new Intl.NumberFormat("en-IN").format(Number(form.price))}`
+                  : undefined
+              }
+            />
           </div>
 
-          {/* Description */}
           <div>
-            <label className="block text-xs font-semibold text-ink dark:text-stone-200 mb-1.5">
-              Item Description
+            <label className="mb-1.5 block text-xs font-medium text-text">
+              Item description
             </label>
             <textarea
               rows={4}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="w-full border border-ink/20 dark:border-stone-700 rounded-xl p-3 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
+              className="w-full rounded-md border border-border bg-surface p-3 text-sm text-text placeholder:text-text-tertiary focus:border-primary focus:outline-hidden"
             />
           </div>
 
-          {/* Confirmed Pickup Area */}
           <div>
-            <label className="block text-xs font-semibold text-ink dark:text-stone-200 mb-1.5">
-              Pickup Area (Revealed only to confirmed buyers)
-            </label>
-            <input
-              type="text"
+            <Input
+              label="Pickup area instructions"
+              placeholder="e.g. Central Library 1st Floor, Hostel B Lounge"
               value={form.pickup_area}
               onChange={(e) => setForm({ ...form, pickup_area: e.target.value })}
-              placeholder="e.g. Central Library 1st Floor, Hostel B Lounge"
-              className="w-full border border-ink/20 dark:border-stone-700 rounded-xl px-3.5 py-2.5 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
+              helperText="Only revealed to confirmed buyers."
             />
           </div>
 
-          {/* Photos and 3D Studio */}
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3 flex items-center justify-between">
               <div>
-                <label className="block text-xs font-bold text-ink dark:text-stone-200 flex items-center gap-1.5">
-                  <span>Item Photos &amp; 3D Studio</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
-                    3D Multi-Angle
-                  </span>
+                <label className="block text-xs font-medium text-text">
+                  Item photos &amp; 3D studio
                 </label>
-                <p className="text-[11px] text-ink/70 dark:text-stone-300">
-                  Upload every angle of your item (Front, Right, Back, Left, Top, Bottom) to convert it into 3D!
+                <p className="text-xs text-text-secondary">
+                  Update angles or upload additional photos
                 </p>
               </div>
 
-              <div className="flex items-center gap-1 bg-sand/60 dark:bg-stone-800 p-1 rounded-xl text-xs">
+              <div className="flex items-center rounded-md border border-border bg-surface-muted p-0.5 text-xs">
                 <button
                   type="button"
                   onClick={() => setActivePhotoTab("3d")}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                  className={`inline-flex items-center gap-1 rounded-sm px-2.5 py-1 font-medium transition-colors ${
                     activePhotoTab === "3d"
-                      ? "bg-moss text-white shadow-sm"
-                      : "text-ink/70 dark:text-stone-300 hover:text-ink"
+                      ? "bg-surface text-text shadow-xs"
+                      : "text-text-secondary hover:text-text"
                   }`}
                 >
-                  🧊 3D Studio
+                  <Layers className="h-3.5 w-3.5" strokeWidth={1.75} /> 3D studio
                 </button>
                 <button
                   type="button"
                   onClick={() => setActivePhotoTab("classic")}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                  className={`inline-flex items-center gap-1 rounded-sm px-2.5 py-1 font-medium transition-colors ${
                     activePhotoTab === "classic"
-                      ? "bg-moss text-white shadow-sm"
-                      : "text-ink/70 dark:text-stone-300 hover:text-ink"
+                      ? "bg-surface text-text shadow-xs"
+                      : "text-text-secondary hover:text-text"
                   }`}
                 >
-                  📸 Classic
+                  <Camera className="h-3.5 w-3.5" strokeWidth={1.75} /> Standard photos
                 </button>
               </div>
             </div>
 
             {activePhotoTab === "3d" ? (
-              <div className="space-y-3">
-                <MultiAnglePhotoStudio
-                  initialPreviews={anglePreviews}
-                  onAnglesChange={(files, previews, ready) => {
-                    setAngleFiles(files);
-                    setAnglePreviews(previews);
-                    setIs3DReady(ready);
-                  }}
-                  onError={(err) => setError(err)}
-                />
-              </div>
+              <MultiAnglePhotoStudio
+                initialPreviews={anglePreviews}
+                onAnglesChange={(files, previews, ready) => {
+                  setAngleFiles(files);
+                  setAnglePreviews(previews);
+                  setIs3DReady(ready);
+                }}
+                onError={(err) => setError(err)}
+              />
             ) : (
               <div>
-                <div className="flex flex-wrap gap-2.5 mb-3">
-                  {/* Existing Images */}
+                <div className="mb-3 flex flex-wrap gap-2.5">
                   {existingImages.map((url, idx) => (
-                    <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-ink/10 dark:border-stone-700">
-                      <img src={resolveImageUrl(url)} alt={`Photo ${idx}`} className="w-full h-full object-cover" />
-                      <span className="absolute bottom-1 right-1 text-[9px] bg-black/70 text-white px-1 rounded">Saved</span>
+                    <div
+                      key={idx}
+                      className="relative h-20 w-20 overflow-hidden rounded-md border border-border bg-surface-muted"
+                    >
+                      <img
+                        src={resolveImageUrl(url)}
+                        alt={`Photo ${idx + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                      <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[10px] text-white">
+                        Saved
+                      </span>
                     </div>
                   ))}
 
-                  {/* New Photos Preview */}
                   {newPreviews.map((url, idx) => (
-                    <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-emerald-500">
-                      <img src={url} alt={`New upload ${idx}`} className="w-full h-full object-cover" />
+                    <div
+                      key={idx}
+                      className="relative h-20 w-20 overflow-hidden rounded-md border border-primary"
+                    >
+                      <img
+                        src={url}
+                        alt={`New upload ${idx + 1}`}
+                        className="h-full w-full object-cover"
+                      />
                       <button
                         type="button"
                         onClick={() => handleRemoveNewFile(idx)}
-                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold"
+                        className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-danger text-on-primary hover:opacity-90"
                       >
-                        ✕
+                        <X className="h-3 w-3" />
                       </button>
                     </div>
                   ))}
 
-                  {/* Add Photo Button */}
                   {existingImages.length + newFiles.length < 5 && (
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="w-20 h-20 rounded-xl border-2 border-dashed border-ink/20 dark:border-stone-700 hover:border-moss dark:hover:border-emerald-400 flex flex-col items-center justify-center text-ink/40 dark:text-stone-400 text-xs gap-1 transition-colors"
+                      className="flex h-20 w-20 flex-col items-center justify-center rounded-md border border-dashed border-border text-xs text-text-tertiary transition-colors hover:border-primary hover:text-primary"
                     >
-                      <span className="text-lg">+</span>
-                      <span className="text-[10px]">Add Photo</span>
+                      <Upload className="h-4 w-4" strokeWidth={1.75} />
+                      <span className="mt-1 text-[11px]">Add photo</span>
                     </button>
                   )}
                 </div>
@@ -426,27 +448,22 @@ export default function EditListingPage() {
             )}
           </div>
 
-          {/* Submit and Cancel Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-ink/10 dark:border-stone-800">
-            <Link
-              href={`/listings/${id}`}
-              className="px-4 py-2.5 text-xs font-semibold rounded-xl border border-ink/20 dark:border-stone-700 text-ink/70 dark:text-stone-300 hover:bg-sand dark:hover:bg-stone-800 transition-colors"
-            >
-              Cancel
+          <div className="flex items-center justify-end gap-2.5 border-t border-border pt-4">
+            <Link href={`/listings/${id}`}>
+              <Button type="button" variant="secondary">
+                Cancel
+              </Button>
             </Link>
-            <button
+            <Button
               type="submit"
+              variant="primary"
               disabled={submitting || uploadingImage}
-              className="px-6 py-2.5 text-xs font-bold rounded-xl bg-moss text-white hover:bg-moss/90 disabled:opacity-50 transition-all shadow-sm flex items-center gap-1.5"
             >
-              {submitting || uploadingImage ? (
-                <>
-                  <span className="animate-spin text-sm">⏳</span> Saving Changes…
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </button>
+              <Save className="h-4 w-4" strokeWidth={1.75} />
+              <span>
+                {submitting || uploadingImage ? "Saving changes..." : "Save changes"}
+              </span>
+            </Button>
           </div>
         </form>
       </div>

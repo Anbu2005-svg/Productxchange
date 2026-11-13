@@ -5,10 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api, setToken, getToken } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import { AlertCircle, Eye, EyeOff, Lock, Mail, ArrowLeft } from "lucide-react";
 
 function getSafeRedirectUrl(url: string | null): string {
   if (!url) return "/";
-  // Open redirect defense: reject external domains, protocol-relative '//' and backslashes '/\'
   if (url.startsWith("/") && !url.startsWith("//") && !url.startsWith("/\\")) {
     return url;
   }
@@ -54,11 +56,11 @@ function LoginForm() {
         body: JSON.stringify({ email, password }),
       });
       setToken(access_token);
-      showToast("Welcome back! 👋", "success");
+      showToast("Signed in successfully", "success");
       const redirect = getSafeRedirectUrl(searchParams.get("redirect"));
       router.push(redirect);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Invalid email or password");
     } finally {
       setSubmitting(false);
     }
@@ -74,12 +76,12 @@ function LoginForm() {
         method: "POST",
         body: JSON.stringify({ email }),
       });
-      setSuccessMsg(res.message);
+      setSuccessMsg(res.message || "Password recovery link sent");
       if (res.dev_reset_token) {
-        showToast("Dev reset token received (check URL or console)", "success");
+        showToast("Dev reset token received", "info");
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Failed to process password recovery");
     } finally {
       setSubmitting(false);
     }
@@ -98,292 +100,239 @@ function LoginForm() {
         method: "POST",
         body: JSON.stringify({ token: resetTokenParam, new_password: newPassword }),
       });
-      showToast("Password updated! Please log in with your new password.", "success");
+      showToast("Password updated. Please sign in with your new password.", "success");
       setMode("login");
       setSuccessMsg("Password reset successfully. You can now log in.");
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Failed to reset password");
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="min-h-[75vh] flex items-center justify-center -mt-6">
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 bg-white/95 dark:bg-[#1a211d]/95 backdrop-blur-xl rounded-3xl shadow-xl overflow-hidden border border-ink/8 dark:border-white/10 animate-scale-in transition-colors">
-        {/* Left: Branding Panel */}
-        <div className="hidden md:flex flex-col justify-between p-8 bg-gradient-to-br from-emerald-900 via-[#1c2b24] to-[#122019] text-white relative overflow-hidden">
-          <div className="absolute -top-12 -right-12 w-40 h-40 bg-white/5 rounded-full" />
-          <div className="absolute -bottom-16 -left-8 w-52 h-52 bg-white/5 rounded-full" />
-
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-8">
-              <span className="text-3xl">🔄</span>
-              <span className="font-extrabold text-2xl tracking-tight">
-                Product<span className="text-emerald-400">Xchange</span>
-              </span>
+    <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center py-8">
+      {/* Centered Single Card */}
+      <div className="rounded-lg border border-border bg-surface p-6 sm:p-8 shadow-xs">
+        {mode === "login" && (
+          <>
+            <div className="mb-6">
+              <h1 className="text-xl font-semibold text-text">Sign in</h1>
+              <p className="mt-1 text-xs text-text-secondary">
+                Enter your verified college email to access campus exchange
+              </p>
             </div>
 
-            <h2 className="text-2xl font-bold leading-snug mb-4">
-              Trade, Rent &<br />
-              Exchange on Campus
-            </h2>
-            <p className="text-sm text-white/70 leading-relaxed mb-8">
-              The location-first marketplace built for college students.
-              Buy textbooks, share lab equipment, or donate hostel items —
-              all within your campus radius.
-            </p>
+            {successMsg && (
+              <div className="mb-4 rounded-md border border-primary/20 bg-primary-subtle p-3 text-xs text-primary">
+                {successMsg}
+              </div>
+            )}
 
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <span className="text-lg mt-0.5">📍</span>
-                <div>
-                  <p className="font-semibold text-sm">Location-Based Discovery</p>
-                  <p className="text-xs text-white/60">Find items within walking distance</p>
+            {error && (
+              <div className="mb-4 flex items-start gap-2 rounded-md border border-danger/20 bg-danger-subtle p-3 text-xs text-danger">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={1.75} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <Input
+                  label="College email address"
+                  id="login-email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="name@college.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="login-password" className="block text-xs font-medium text-text">
+                    Password <span className="text-danger">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("forgot");
+                      setError(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-md border border-border bg-surface px-3 py-2 pr-10 text-base text-text placeholder:text-text-tertiary focus:border-primary focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-2.5 text-text-tertiary hover:text-text"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+                    ) : (
+                      <Eye className="h-4 w-4" strokeWidth={1.75} />
+                    )}
+                  </button>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <span className="text-lg mt-0.5">🤝</span>
-                <div>
-                  <p className="font-semibold text-sm">Safe Campus Trading</p>
-                  <p className="text-xs text-white/60">Built-in trust scores & verified users</p>
-                </div>
+
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full"
+                  disabled={!isEmailValid || !password || submitting}
+                  loading={submitting}
+                >
+                  Sign in
+                </Button>
               </div>
-              <div className="flex items-start gap-3">
-                <span className="text-lg mt-0.5">✨</span>
-                <div>
-                  <p className="font-semibold text-sm">AI-Powered Listings</p>
-                  <p className="text-xs text-white/60">Auto-fill descriptions from photos</p>
-                </div>
-              </div>
+            </form>
+
+            <div className="mt-6 border-t border-border pt-4 text-center">
+              <p className="text-xs text-text-secondary">
+                New to ProductXchange?{" "}
+                <Link href="/register" className="font-medium text-primary hover:underline">
+                  Create an account
+                </Link>
+              </p>
             </div>
-          </div>
+          </>
+        )}
 
-          <p className="text-[11px] text-white/40 relative z-10">
-            Join 500+ students trading on campus
-          </p>
-        </div>
+        {mode === "forgot" && (
+          <>
+            <div className="mb-6">
+              <h1 className="text-xl font-semibold text-text">Reset password</h1>
+              <p className="mt-1 text-xs text-text-secondary">
+                Enter your registered college email and we will send a recovery link
+              </p>
+            </div>
 
-        {/* Right: Form Container */}
-        <div className="flex flex-col justify-center p-5 sm:p-8 md:p-10">
-          <div className="md:hidden flex items-center gap-2 mb-6">
-            <span className="text-2xl">🔄</span>
-            <span className="font-extrabold text-xl tracking-tight text-moss dark:text-emerald-400">
-              Product<span className="text-ink dark:text-sand">Xchange</span>
-            </span>
-          </div>
-
-          {/* MODE 1: Standard Login */}
-          {mode === "login" && (
-            <>
-              <h1 className="text-2xl font-bold text-ink dark:text-white mb-1">Welcome back</h1>
-              <p className="text-sm text-ink/60 dark:text-stone-400 mb-8">Sign in to your account to continue</p>
-
-              {successMsg && (
-                <div className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs text-emerald-900 dark:text-emerald-200 font-medium">
+            {successMsg ? (
+              <div className="space-y-4 text-xs">
+                <div className="rounded-md border border-primary/20 bg-primary-subtle p-3 text-primary">
                   {successMsg}
                 </div>
-              )}
-
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label htmlFor="login-email" className="block text-xs font-semibold text-ink/70 dark:text-stone-300 mb-1.5">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-3 text-sm text-ink/35">📧</span>
-                    <input
-                      id="login-email"
-                      className={`w-full border rounded-xl pl-10 pr-4 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none transition-colors ${
-                        email && !isEmailValid
-                          ? "border-red-300 focus:border-red-400"
-                          : "border-ink/15 dark:border-stone-700 focus:border-moss"
-                      }`}
-                      placeholder="you@college.edu"
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label htmlFor="login-password" className="block text-xs font-semibold text-ink/70 dark:text-stone-300">
-                      Password
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMode("forgot");
-                        setError(null);
-                        setSuccessMsg(null);
-                      }}
-                      className="text-xs text-moss dark:text-emerald-400 hover:underline"
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-3 text-sm text-ink/35">🔒</span>
-                    <input
-                      id="login-password"
-                      className="w-full border border-ink/15 dark:border-stone-700 rounded-xl pl-10 pr-11 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss transition-colors"
-                      placeholder="Enter your password"
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-2.5 text-sm text-ink/40 dark:text-stone-400 hover:text-ink/70 transition-colors"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? "🙈" : "👁️"}
-                    </button>
-                  </div>
-                </div>
-
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => setMode("login")}
+                >
+                  Return to sign in
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
                 {error && (
-                  <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 border-l-4 border-l-red-500 rounded-lg text-xs text-red-700 dark:text-red-300 font-medium">
-                    {error}
+                  <div className="flex items-start gap-2 rounded-md border border-danger/20 bg-danger-subtle p-3 text-xs text-danger">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={1.75} />
+                    <span>{error}</span>
                   </div>
                 )}
 
-                <button
+                <Input
+                  label="Registered college email"
+                  type="email"
+                  required
+                  placeholder="name@college.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+
+                <Button
                   type="submit"
-                  disabled={!isEmailValid || !password || submitting}
-                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm flex items-center justify-center gap-2 active:scale-98"
+                  variant="primary"
+                  className="w-full"
+                  disabled={!isEmailValid || submitting}
+                  loading={submitting}
                 >
-                  {submitting ? "Signing in…" : "Sign in"}
-                </button>
-              </form>
+                  Send recovery link
+                </Button>
 
-              <div className="mt-6 pt-6 border-t border-ink/10 dark:border-stone-800 text-center">
-                <p className="text-sm text-ink/60 dark:text-stone-400">
-                  New here?{" "}
-                  <Link href="/register" className="text-moss dark:text-emerald-400 font-semibold hover:underline">
-                    Create an account
-                  </Link>
-                </p>
-              </div>
-            </>
-          )}
-
-          {/* MODE 2: Forgot Password */}
-          {mode === "forgot" && (
-            <div className="animate-fade-in">
-              <h1 className="text-2xl font-bold text-ink dark:text-white mb-1">Reset Password</h1>
-              <p className="text-sm text-ink/60 dark:text-stone-400 mb-6">
-                Enter your campus student email and we'll send you a password recovery link.
-              </p>
-
-              {successMsg ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-900 dark:text-emerald-200 leading-relaxed">
-                    {successMsg}
-                  </div>
-                  <button
-                    onClick={() => setMode("login")}
-                    className="w-full border border-ink/20 dark:border-stone-700 text-ink dark:text-white text-xs font-semibold py-2.5 rounded-xl hover:bg-sand dark:hover:bg-stone-800 transition-colors"
-                  >
-                    ← Back to Sign In
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleForgotPassword} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-ink/70 dark:text-stone-300 mb-1.5">
-                      Your Registered Email
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@college.edu"
-                      className="w-full border border-ink/15 dark:border-stone-700 rounded-xl px-4 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-                    />
-                  </div>
-
-                  {error && (
-                    <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-300">
-                      {error}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={!isEmailValid || submitting}
-                    className="w-full bg-moss text-white font-semibold py-3 px-4 rounded-xl hover:bg-moss/90 disabled:opacity-50 transition-all text-sm"
-                  >
-                    {submitting ? "Sending Link…" : "Send Reset Link"}
-                  </button>
-
+                <div className="pt-2 text-center">
                   <button
                     type="button"
                     onClick={() => {
                       setMode("login");
                       setError(null);
                     }}
-                    className="w-full text-xs text-ink/60 dark:text-stone-400 hover:underline text-center pt-2"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary hover:text-text"
                   >
-                    ← Back to Sign In
+                    <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    <span>Back to sign in</span>
                   </button>
-                </form>
-              )}
-            </div>
-          )}
-
-          {/* MODE 3: Enter New Password (via reset token) */}
-          {mode === "reset" && (
-            <div className="animate-fade-in">
-              <h1 className="text-2xl font-bold text-ink dark:text-white mb-1">Set New Password</h1>
-              <p className="text-sm text-ink/60 dark:text-stone-400 mb-6">Choose a secure new password for your account.</p>
-
-              <form onSubmit={handleResetPassword} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-ink/70 dark:text-stone-300 mb-1.5">
-                    New Password (min 8 characters)
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Enter new password"
-                    className="w-full border border-ink/15 dark:border-stone-700 rounded-xl px-4 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-                  />
                 </div>
+              </form>
+            )}
+          </>
+        )}
 
-                {error && (
-                  <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-300">
-                    {error}
-                  </div>
-                )}
+        {mode === "reset" && (
+          <>
+            <div className="mb-6">
+              <h1 className="text-xl font-semibold text-text">Set new password</h1>
+              <p className="mt-1 text-xs text-text-secondary">
+                Enter a secure password for your account
+              </p>
+            </div>
 
-                <button
-                  type="submit"
-                  disabled={newPassword.length < 8 || submitting}
-                  className="w-full bg-moss text-white font-semibold py-3 px-4 rounded-xl hover:bg-moss/90 disabled:opacity-50 transition-all text-sm"
-                >
-                  {submitting ? "Updating Password…" : "Update Password"}
-                </button>
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              {error && (
+                <div className="flex items-start gap-2 rounded-md border border-danger/20 bg-danger-subtle p-3 text-xs text-danger">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={1.75} />
+                  <span>{error}</span>
+                </div>
+              )}
 
+              <Input
+                label="New password (minimum 8 characters)"
+                type="password"
+                required
+                placeholder="Enter new password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+
+              <Button
+                type="submit"
+                variant="primary"
+                className="w-full"
+                disabled={newPassword.length < 8 || submitting}
+                loading={submitting}
+              >
+                Update password
+              </Button>
+
+              <div className="pt-2 text-center">
                 <button
                   type="button"
                   onClick={() => setMode("login")}
-                  className="w-full text-xs text-ink/60 dark:text-stone-400 hover:underline text-center pt-2"
+                  className="text-xs font-medium text-text-secondary hover:text-text"
                 >
-                  ← Back to Sign In
+                  Back to sign in
                 </button>
-              </form>
-            </div>
-          )}
-        </div>
+              </div>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
@@ -393,8 +342,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-[50vh] flex items-center justify-center text-sm text-ink/60 dark:text-stone-400 animate-pulse">
-          Loading sign in…
+        <div className="mx-auto max-w-md py-16 text-center text-xs text-text-secondary">
+          Loading sign in...
         </div>
       }
     >

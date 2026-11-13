@@ -1,48 +1,49 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, Transaction, resolveImageUrl, User, getToken, API_BASE, returnRentalItem } from "@/lib/api";
+import {
+  api,
+  Transaction,
+  resolveImageUrl,
+  User,
+  getToken,
+  API_BASE,
+  returnRentalItem,
+} from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { DealCardSkeleton } from "@/components/Skeleton";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Badge, { TypeTag } from "@/components/ui/Badge";
+import {
+  Check,
+  X,
+  ArrowLeftRight,
+  Lock,
+  Unlock,
+  Copy,
+  Printer,
+  Clock,
+  Calendar,
+  AlertCircle,
+  Star,
+  CheckCircle2,
+  Package,
+  Plus,
+  ArrowRight,
+  RotateCw,
+} from "lucide-react";
 
-const STATE_CONFIG: Record<string, { label: string; badge: string; desc: string }> = {
-  PENDING: {
-    label: "Offer Pending",
-    badge: "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800",
-    desc: "Awaiting initial review and counter/acceptance.",
-  },
-  COUNTERED: {
-    label: "Counter-Offered",
-    badge: "bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950/40 dark:text-purple-200 dark:border-purple-800",
-    desc: "A new price has been proposed by one of the parties.",
-  },
-  ACCEPTED: {
-    label: "Offer Accepted",
-    badge: "bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-800",
-    desc: "Agreed on terms! Please confirm to reveal pickup details.",
-  },
-  CONFIRMED: {
-    label: "Deal Confirmed",
-    badge: "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800",
-    desc: "Pickup spot unlocked! Meet up and verify the handover.",
-  },
-  COMPLETED: {
-    label: "Completed",
-    badge: "bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-200 dark:border-green-800",
-    desc: "Both parties have confirmed successful handover.",
-  },
-  REJECTED: {
-    label: "Declined",
-    badge: "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800",
-    desc: "This transaction offer was declined.",
-  },
-  CANCELLED: {
-    label: "Cancelled",
-    badge: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-700",
-    desc: "This deal was cancelled.",
-  },
-};
+type DealTab = "active" | "rentals" | "completed" | "cancelled" | "all";
+
+const STAGES = [
+  { key: "PENDING", label: "Offer pending" },
+  { key: "COUNTERED", label: "Countered" },
+  { key: "ACCEPTED", label: "Accepted" },
+  { key: "CONFIRMED", label: "Confirmed" },
+  { key: "COMPLETED", label: "Completed" },
+];
 
 export default function DealsPage() {
   const { showToast } = useToast();
@@ -51,7 +52,7 @@ export default function DealsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"all" | "active" | "actionable" | "completed">("all");
+  const [activeTab, setActiveTab] = useState<DealTab>("active");
 
   // State for countering
   const [counterTxId, setCounterTxId] = useState<number | null>(null);
@@ -69,6 +70,9 @@ export default function DealsPage() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [reviewedTxIds, setReviewedTxIds] = useState<Set<number>>(new Set());
+
+  // Copy feedback state
+  const [copiedPinTxId, setCopiedPinTxId] = useState<number | null>(null);
 
   async function loadData() {
     setLoading(true);
@@ -89,7 +93,6 @@ export default function DealsPage() {
   useEffect(() => {
     loadData();
 
-    // Live WebSocket connection for instant deal updates (offers, acceptances, confirmations)
     const token = getToken();
     if (!token) return;
 
@@ -109,7 +112,6 @@ export default function DealsPage() {
           try {
             const data = JSON.parse(event.data);
             if (data.deal_update || (data.link && data.link.includes("/deals"))) {
-              // Silently refresh deals when state updates arrive
               api("/transactions/mine")
                 .then((txList) => setTransactions(txList))
                 .catch(() => {});
@@ -147,14 +149,17 @@ export default function DealsPage() {
       setCounterMsg("");
 
       const msgs: Record<string, string> = {
-        accept: "✅ Offer accepted!",
-        reject: "❌ Offer declined",
-        counter: "📤 Counter-offer sent!",
-        confirm: "🔓 Deal confirmed! Location unlocked.",
-        complete: "🤝 Handover signed off!",
+        accept: "Offer accepted",
+        reject: "Offer declined",
+        counter: "Counter-offer sent",
+        confirm: "Deal confirmed. Location details unlocked.",
+        complete: "Handover signed off",
         cancel: "Deal cancelled",
       };
-      showToast(msgs[action] || `Action '${action}' completed`, action === "reject" || action === "cancel" ? "info" : "success");
+      showToast(
+        msgs[action] || `Action '${action}' completed`,
+        action === "reject" || action === "cancel" ? "info" : "success"
+      );
 
       await loadData();
     } catch (e: any) {
@@ -180,7 +185,7 @@ export default function DealsPage() {
       setReviewTxId(null);
       setReviewRating(5);
       setReviewComment("");
-      showToast("⭐ Review submitted! Thank you.", "success");
+      showToast("Review submitted", "success");
     } catch (e: any) {
       showToast(e.message, "error");
     } finally {
@@ -199,7 +204,7 @@ export default function DealsPage() {
         method: "POST",
         body: JSON.stringify({ pin: verifyPinInput.trim() }),
       });
-      showToast("🤝 Handshake verified! Deal completed successfully.", "success");
+      showToast("Handshake verified. Deal completed.", "success");
       setVerifyTxId(null);
       setVerifyPinInput("");
       await loadData();
@@ -208,6 +213,19 @@ export default function DealsPage() {
     } finally {
       setVerifyingHandshake(false);
     }
+  }
+
+  function handleCopyPin(pin: string, txId: number) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(pin);
+      setCopiedPinTxId(txId);
+      setTimeout(() => setCopiedPinTxId(null), 2000);
+      showToast("PIN copied to clipboard", "info");
+    }
+  }
+
+  function handlePrintReceipt() {
+    window.print();
   }
 
   function getLastOffer(tx: Transaction) {
@@ -229,7 +247,7 @@ export default function DealsPage() {
       return lastOffer ? lastOffer.proposed_by_id !== currentUser.id : false;
     }
     if (tx.state === "ACCEPTED") {
-      return true; // either can confirm
+      return true;
     }
     if (tx.state === "CONFIRMED") {
       const completedByMe = currentUser.id === tx.buyer_id ? tx.buyer_completed : tx.seller_completed;
@@ -238,89 +256,152 @@ export default function DealsPage() {
     return false;
   }
 
-  const filtered = transactions.filter((tx) => {
-    if (activeTab === "active") {
-      return ["PENDING", "COUNTERED", "ACCEPTED", "CONFIRMED"].includes(tx.state);
+  function getNextActionText(tx: Transaction, otherPartyName: string): string {
+    if (!currentUser) return "";
+    if (tx.state === "PENDING" || tx.state === "COUNTERED") {
+      return isUserTurn(tx)
+        ? "Action required: Review offer and accept, counter, or decline"
+        : `Awaiting response from ${otherPartyName}`;
     }
-    if (activeTab === "actionable") {
-      return isUserTurn(tx);
+    if (tx.state === "ACCEPTED") {
+      return "Action required: Confirm deal to reveal meetup spot and handshake PIN";
+    }
+    if (tx.state === "CONFIRMED") {
+      const completedByMe = currentUser.id === tx.buyer_id ? tx.buyer_completed : tx.seller_completed;
+      if (!completedByMe) {
+        return currentUser.id === tx.buyer_id
+          ? "Show your 6-digit handshake PIN to seller at physical meetup"
+          : "Action required: Verify buyer's 6-digit PIN to sign off handover";
+      }
+      return `Waiting for ${otherPartyName} to sign off handover`;
+    }
+    if (tx.state === "COMPLETED") {
+      return "Handover complete";
+    }
+    if (tx.state === "REJECTED") {
+      return "Offer declined";
+    }
+    if (tx.state === "CANCELLED") {
+      return "Deal cancelled";
+    }
+    return "";
+  }
+
+  const filtered = transactions.filter((tx) => {
+    const isRental = tx.product?.transaction_type === "RENT" || Boolean(tx.rental_period_days);
+    if (activeTab === "rentals") {
+      return isRental;
+    }
+    if (activeTab === "active") {
+      return ["PENDING", "COUNTERED", "ACCEPTED", "CONFIRMED"].includes(tx.state) && !isRental;
     }
     if (activeTab === "completed") {
-      return ["COMPLETED", "REJECTED", "CANCELLED"].includes(tx.state);
+      return tx.state === "COMPLETED" && !isRental;
+    }
+    if (activeTab === "cancelled") {
+      return ["CANCELLED", "REJECTED"].includes(tx.state);
     }
     return true;
   });
 
+  const activeCount = transactions.filter(
+    (tx) => ["PENDING", "COUNTERED", "ACCEPTED", "CONFIRMED"].includes(tx.state) && tx.product?.transaction_type !== "RENT"
+  ).length;
+  const rentalsCount = transactions.filter(
+    (tx) => tx.product?.transaction_type === "RENT" || Boolean(tx.rental_period_days)
+  ).length;
+  const completedCount = transactions.filter(
+    (tx) => tx.state === "COMPLETED" && tx.product?.transaction_type !== "RENT"
+  ).length;
+  const cancelledCount = transactions.filter((tx) => ["CANCELLED", "REJECTED"].includes(tx.state)).length;
+
   return (
-    <div className="max-w-4xl mx-auto py-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div className="mx-auto max-w-4xl py-4 sm:py-6">
+      {/* Header */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-ink dark:text-white">Deals & Negotiations</h1>
-          <p className="text-sm text-ink/70 dark:text-stone-300">
-            Track offers, negotiate prices, unlock pickup locations, and complete handovers.
+          <h1 className="text-xl font-semibold text-text">Deals and negotiations</h1>
+          <p className="text-xs text-text-secondary">
+            Manage offers, unlock meetup spots, and complete physical handshakes
           </p>
         </div>
-        <Link
-          href="/listings/new"
-          className="inline-flex items-center gap-1.5 bg-moss text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm hover:bg-moss/90 transition-all self-start"
-        >
-          <span>+</span> List New Item
+        <Link href="/listings/new">
+          <Button variant="primary" size="sm">
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            <span>List an item</span>
+          </Button>
         </Link>
       </div>
 
       {actionError && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-xs rounded-lg flex justify-between items-center">
+        <div className="mb-4 flex items-center justify-between rounded-md border border-danger/20 bg-danger-subtle p-3 text-xs text-danger">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="font-bold ml-2">✕</button>
+          <button onClick={() => setActionError(null)} className="font-semibold">
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
-      {/* Tabs with Smooth Touch Horizontal Scroll */}
-      <div className="flex overflow-x-auto scrollbar-none touch-pan-x border-b border-ink/10 dark:border-stone-800 mb-6 gap-2 text-sm whitespace-nowrap -mx-1 px-1">
-        <button
-          onClick={() => setActiveTab("all")}
-          className={`pb-3 px-3 font-semibold transition-colors border-b-2 shrink-0 ${
-            activeTab === "all"
-              ? "border-moss text-moss dark:border-emerald-400 dark:text-emerald-400"
-              : "border-transparent text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
-          }`}
-        >
-          All Deals ({transactions.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("actionable")}
-          className={`pb-3 px-3 font-semibold transition-colors border-b-2 flex items-center gap-1.5 shrink-0 ${
-            activeTab === "actionable"
-              ? "border-moss text-moss dark:border-emerald-400 dark:text-emerald-400"
-              : "border-transparent text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
-          }`}
-        >
-          Needs Your Action
-          {transactions.filter(isUserTurn).length > 0 && (
-            <span className="bg-clay text-white text-[11px] font-bold px-1.5 py-0.2 rounded-full">
-              {transactions.filter(isUserTurn).length}
-            </span>
-          )}
-        </button>
+      {/* 4 Tabs: Active, Rentals, Completed, Cancelled */}
+      <div className="mb-6 flex overflow-x-auto border-b border-border text-xs font-medium whitespace-nowrap">
         <button
           onClick={() => setActiveTab("active")}
-          className={`pb-3 px-3 font-semibold transition-colors border-b-2 shrink-0 ${
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 transition-colors ${
             activeTab === "active"
-              ? "border-moss text-moss dark:border-emerald-400 dark:text-emerald-400"
-              : "border-transparent text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
+              ? "border-primary text-primary"
+              : "border-transparent text-text-secondary hover:text-text"
           }`}
         >
-          Active Negotiations
+          <span>Active</span>
+          <span className="font-mono tabular-nums text-text-tertiary">({activeCount})</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab("rentals")}
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 transition-colors ${
+            activeTab === "rentals"
+              ? "border-primary text-primary"
+              : "border-transparent text-text-secondary hover:text-text"
+          }`}
+        >
+          <span>Rentals</span>
+          <span className="font-mono tabular-nums text-text-tertiary">({rentalsCount})</span>
+        </button>
+
         <button
           onClick={() => setActiveTab("completed")}
-          className={`pb-3 px-3 font-semibold transition-colors border-b-2 shrink-0 ${
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 transition-colors ${
             activeTab === "completed"
-              ? "border-moss text-moss dark:border-emerald-400 dark:text-emerald-400"
-              : "border-transparent text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
+              ? "border-primary text-primary"
+              : "border-transparent text-text-secondary hover:text-text"
           }`}
         >
-          Past / Completed
+          <span>Completed</span>
+          <span className="font-mono tabular-nums text-text-tertiary">({completedCount})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("cancelled")}
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 transition-colors ${
+            activeTab === "cancelled"
+              ? "border-primary text-primary"
+              : "border-transparent text-text-secondary hover:text-text"
+          }`}
+        >
+          <span>Cancelled</span>
+          <span className="font-mono tabular-nums text-text-tertiary">({cancelledCount})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("all")}
+          className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 transition-colors ${
+            activeTab === "all"
+              ? "border-primary text-primary"
+              : "border-transparent text-text-secondary hover:text-text"
+          }`}
+        >
+          <span>All</span>
+          <span className="font-mono tabular-nums text-text-tertiary">({transactions.length})</span>
         </button>
       </div>
 
@@ -333,139 +414,291 @@ export default function DealsPage() {
       )}
 
       {!loading && error && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
+        <div className="rounded-md border border-danger/20 bg-danger-subtle p-4 text-xs text-danger">
           {error}
         </div>
       )}
 
       {!loading && !error && filtered.length === 0 && (
-        <div className="text-center py-16 bg-white dark:bg-[#1a211d] border border-ink/8 dark:border-white/10 rounded-3xl p-8 shadow-xs">
-          <svg className="w-12 h-12 mx-auto text-ink/30 dark:text-stone-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <h3 className="font-bold text-ink dark:text-white text-base">No transactions found</h3>
-          <p className="text-xs text-ink/60 dark:text-stone-400 mt-1 max-w-sm mx-auto">
-            {activeTab === "actionable"
-              ? "You have no offers waiting for your response right now."
-              : "Browse campus listings to find essentials, or list something to start negotiating."}
+        <div className="rounded-lg border border-border bg-surface p-10 text-center">
+          <Package className="mx-auto mb-3 h-8 w-8 text-text-tertiary" strokeWidth={1.5} />
+          <h3 className="text-sm font-semibold text-text">No transactions found</h3>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-text-secondary">
+            {activeTab === "active"
+              ? "You have no active negotiations right now."
+              : activeTab === "rentals"
+              ? "No rental transactions active or in history."
+              : "Browse campus listings to find essentials, or list something to begin."}
           </p>
-          <Link
-            href="/"
-            className="mt-4 inline-block text-xs font-semibold text-emerald-600 dark:text-emerald-400 underline hover:text-emerald-700"
-          >
-            Browse Nearby Items →
-          </Link>
+          <div className="mt-4">
+            <Link href="/">
+              <Button variant="secondary" size="sm">
+                Browse nearby items
+              </Button>
+            </Link>
+          </div>
         </div>
       )}
 
-      {/* Transactions List */}
+      {/* Transaction Cards List */}
       <div className="space-y-4">
         {filtered.map((tx) => {
           const isBuyer = currentUser?.id === tx.buyer_id;
           const isSeller = currentUser?.id === tx.seller_id;
-          const roleLabel = isBuyer ? "You are Buyer" : "You are Seller";
-          const otherPartyName = isBuyer ? (tx.seller?.full_name || tx.seller?.email || "Seller") : (tx.buyer?.full_name || tx.buyer?.email || "Buyer");
-          const stateMeta = STATE_CONFIG[tx.state] || { label: tx.state, badge: "bg-gray-100 text-gray-800", desc: "" };
+          const otherPartyName = isBuyer
+            ? tx.seller?.full_name || tx.seller?.email || "Seller"
+            : tx.buyer?.full_name || tx.buyer?.email || "Buyer";
           const lastOffer = getLastOffer(tx);
           const needsMyResponse = isUserTurn(tx);
           const hasImage = tx.product?.image_urls && tx.product.image_urls.length > 0;
+          const agreedPrice = tx.agreed_price != null ? tx.agreed_price : lastOffer?.amount || tx.product?.price || 0;
+          const nextActionText = getNextActionText(tx, otherPartyName);
+
+          // Rental calculations
+          const isRental = tx.product?.transaction_type === "RENT" || Boolean(tx.rental_period_days);
+          const now = new Date();
+          const dueDate = tx.rental_due_date ? new Date(tx.rental_due_date) : null;
+          const daysRemaining = dueDate ? Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+          // Negotiation Stage index
+          const currentStageIndex =
+            tx.state === "PENDING"
+              ? 0
+              : tx.state === "COUNTERED"
+              ? 1
+              : tx.state === "ACCEPTED"
+              ? 2
+              : tx.state === "CONFIRMED"
+              ? 3
+              : tx.state === "COMPLETED"
+              ? 4
+              : -1;
 
           return (
             <div
               key={tx.id}
-              className={`bg-white dark:bg-[#1a211d] border rounded-3xl p-4 sm:p-5 shadow-xs transition-all ${
+              className={`rounded-lg border bg-surface p-5 transition-colors ${
                 needsMyResponse
-                  ? "border-emerald-500 ring-2 ring-emerald-500/20 dark:border-emerald-500/60 dark:ring-emerald-500/30"
-                  : "border-ink/8 dark:border-white/10 hover:border-ink/20 dark:hover:border-white/20"
+                  ? "border-primary ring-1 ring-primary/20"
+                  : "border-border hover:border-border-strong"
               }`}
             >
-              {/* Top Bar: Role & Status */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-ink/5 dark:border-stone-800">
+              {/* Card Header: Role & Status */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3 text-xs">
                 <div className="flex items-center gap-2">
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                    isBuyer ? "bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800" : "bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-300 border border-teal-200 dark:border-teal-800"
-                  }`}>
-                    {roleLabel}
+                  <span className="font-semibold text-text">
+                    {isBuyer ? "Buying from" : "Selling to"} {otherPartyName}
                   </span>
-                  <span className="text-xs text-ink/60 dark:text-stone-400">
-                    with <strong className="text-ink dark:text-white">{otherPartyName}</strong>
+                  <span className="text-text-tertiary">•</span>
+                  <span className="text-text-secondary">
+                    {isBuyer ? "Buyer" : "Seller"}
                   </span>
                 </div>
+
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${stateMeta.badge}`}>
-                    {stateMeta.label}
-                  </span>
-                  <span className="text-[11px] text-ink/40 dark:text-stone-500">
-                    {new Date(tx.updated_at || tx.created_at).toLocaleDateString()}
+                  <Badge status={tx.state as any} />
+                  <span className="font-mono text-xs tabular-nums text-text-tertiary">
+                    {new Date(tx.updated_at || tx.created_at).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                    })}
                   </span>
                 </div>
               </div>
 
-              {/* Main Content Area */}
-              <div className="flex flex-col sm:flex-row gap-4 py-4">
-                {/* Product Thumbnail */}
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-sand/60 dark:bg-stone-800 border border-ink/10 dark:border-stone-700 shrink-0 flex items-center justify-center">
+              {/* Product and Price Bar */}
+              <div className="flex flex-col gap-4 py-4 sm:flex-row">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-surface-muted sm:h-20 sm:w-20">
                   {hasImage ? (
                     <img
                       src={resolveImageUrl(tx.product?.image_urls[0])}
                       alt={tx.product?.title || "Item"}
-                      className="w-full h-full object-cover"
+                      className="h-full w-full object-cover"
                     />
                   ) : (
-                    <span className="text-2xl">📦</span>
+                    <Package className="h-6 w-6 text-text-tertiary" strokeWidth={1.5} />
                   )}
                 </div>
 
-                {/* Deal Details */}
-                <div className="flex-1">
-                  <Link
-                    href={`/listings/${tx.product_id}`}
-                    className="font-bold text-base text-ink dark:text-white hover:text-moss dark:hover:text-emerald-400 transition-colors line-clamp-1"
-                  >
-                    {tx.product?.title || `Item #${tx.product_id}`}
-                  </Link>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Link
+                      href={`/listings/${tx.product_id}`}
+                      className="truncate text-sm font-semibold text-text hover:text-primary"
+                    >
+                      {tx.product?.title || `Item #${tx.product_id}`}
+                    </Link>
+                    <div className="font-mono text-sm font-semibold tabular-nums text-text">
+                      ₹{new Intl.NumberFormat("en-IN").format(agreedPrice)}
+                    </div>
+                  </div>
 
-                  <div className="mt-1 flex flex-wrap items-baseline gap-3 text-sm">
-                    <span className="text-ink/60 dark:text-stone-400 text-xs">
-                      Listing Price: <strong className="text-ink dark:text-stone-300">₹{tx.product?.price || 0}</strong>
-                    </span>
-                    <span className="text-moss dark:text-emerald-400 font-bold text-sm">
-                      Current Agreed Price: ₹{tx.agreed_price != null ? tx.agreed_price : (lastOffer?.amount || tx.product?.price || 0)}
-                    </span>
-                    {tx.rental_period_days && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                        ⏱️ Rental: {tx.rental_period_days} Days
-                      </span>
-                    )}
-                    {tx.product?.transaction_type === "DONATE" && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-900 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
-                        🎁 Free Campus Donation
-                      </span>
-                    )}
-                    {tx.product?.transaction_type === "EXCHANGE" && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 dark:border-blue-800">
-                        🔄 Campus Exchange
-                      </span>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+                    <span>Listing: ₹{new Intl.NumberFormat("en-IN").format(tx.product?.price || 0)}</span>
+                    {tx.product?.transaction_type && (
+                      <TypeTag type={tx.product.transaction_type} />
                     )}
                   </div>
 
+                  {/* Stage Stepper: 5 stages (Offer, Counter, Accept, Confirm, Complete) */}
+                  {currentStageIndex >= 0 && (
+                    <div className="mt-4 border-t border-border pt-3">
+                      <div className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-2">
+                        Negotiation stage
+                      </div>
+                      <div className="flex items-center justify-between gap-1 text-xs">
+                        {STAGES.map((st, idx) => {
+                          const isDone = idx < currentStageIndex;
+                          const isCurrent = idx === currentStageIndex;
+                          return (
+                            <div key={st.key} className="flex flex-1 items-center gap-1.5">
+                              <div
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                                  isCurrent
+                                    ? "bg-primary text-on-primary ring-2 ring-primary/20"
+                                    : isDone
+                                    ? "bg-primary-subtle text-primary"
+                                    : "border border-border bg-surface-muted text-text-tertiary"
+                                }`}
+                              >
+                                {isDone ? <Check className="h-3 w-3" strokeWidth={2.5} /> : idx + 1}
+                              </div>
+                              <span
+                                className={`hidden text-xs truncate sm:inline ${
+                                  isCurrent
+                                    ? "font-medium text-text"
+                                    : isDone
+                                    ? "text-text-secondary"
+                                    : "text-text-tertiary"
+                                }`}
+                              >
+                                {st.label}
+                              </span>
+                              {idx < STAGES.length - 1 && (
+                                <div
+                                  className={`h-0.5 flex-1 transition-colors ${
+                                    idx < currentStageIndex ? "bg-primary" : "bg-border"
+                                  }`}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Next Action Plain Notice */}
+                  <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-border bg-surface-muted px-3 py-2 text-xs">
+                    <span className="font-medium text-text">{nextActionText}</span>
+                    <span className="text-[11px] text-text-tertiary">
+                      {needsMyResponse ? "Your turn" : "Waiting"}
+                    </span>
+                  </div>
+
+                  {/* Rental Timeline & Relist Banner */}
+                  {isRental && (
+                    <div className="mt-3 rounded-md border border-rented/20 bg-rented-subtle p-3 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-rented shrink-0" strokeWidth={1.75} />
+                          <span className="font-medium text-text">
+                            {tx.rental_returned
+                              ? "Item returned and relisted"
+                              : `Rental period: ${tx.rental_period_days || 30} days`}
+                          </span>
+                        </div>
+
+                        {dueDate && !tx.rental_returned && (
+                          <div
+                            className={`font-mono tabular-nums font-medium ${
+                              daysRemaining != null && daysRemaining < 0
+                                ? "text-danger"
+                                : daysRemaining != null && daysRemaining <= 2
+                                ? "text-warning"
+                                : "text-text-secondary"
+                            }`}
+                          >
+                            {daysRemaining != null && daysRemaining < 0
+                              ? `Overdue by ${Math.abs(daysRemaining)} days`
+                              : daysRemaining != null && daysRemaining <= 2
+                              ? `Due in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`
+                              : `Due ${dueDate.toLocaleDateString("en-IN", {
+                                  day: "numeric",
+                                  month: "short",
+                                })}`}
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="mt-1 text-[11px] text-text-secondary">
+                        {tx.rental_returned
+                          ? "This item has been returned safely and restored to campus active listings."
+                          : "Once returned and verified, this item will automatically be relisted for the campus community."}
+                      </p>
+
+                      {!tx.rental_returned && isSeller && tx.state === "COMPLETED" && (
+                        <div className="mt-3">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={submittingAction}
+                            onClick={async () => {
+                              if (
+                                confirm(
+                                  "Confirm that the rented item has been returned safely? This will reactivate the listing for other students."
+                                )
+                              ) {
+                                try {
+                                  await returnRentalItem(tx.id);
+                                  showToast("Rental item marked returned. Listing is active again.", "success");
+                                  loadData();
+                                } catch (err: any) {
+                                  showToast(err.message, "error");
+                                }
+                              }
+                            }}
+                          >
+                            <RotateCw className="h-3.5 w-3.5" strokeWidth={1.75} />
+                            <span>Confirm item return</span>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Negotiation Offer History Thread */}
                   {tx.offers && tx.offers.length > 0 && (
-                    <div className="mt-3 bg-sand/30 dark:bg-stone-800/40 border border-ink/5 dark:border-stone-800 rounded-xl p-3 space-y-1.5">
-                      <p className="text-[11px] uppercase tracking-wider font-semibold text-ink/50 dark:text-stone-400">
-                        Negotiation Timeline
-                      </p>
+                    <div className="mt-3 space-y-1.5 rounded-md border border-border bg-surface-muted p-3 text-xs">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                        Offer history
+                      </div>
                       {tx.offers.map((offer, oIdx) => {
                         const isByMe = currentUser?.id === offer.proposed_by_id;
                         return (
-                          <div key={offer.id || oIdx} className="text-xs flex items-baseline justify-between text-ink/80 dark:text-stone-300">
-                            <span>
-                              <strong>{isByMe ? "You" : otherPartyName}</strong> offered{" "}
-                              <strong className="text-moss dark:text-emerald-400">₹{offer.amount}</strong>
-                              {offer.message && <em className="text-ink/60 dark:text-stone-400 ml-1.5 font-normal">"{offer.message}"</em>}
-                            </span>
-                            <span className="text-[10px] text-ink/40 dark:text-stone-500">
-                              {new Date(offer.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          <div
+                            key={offer.id || oIdx}
+                            className="flex items-baseline justify-between gap-2 text-text-secondary"
+                          >
+                            <div>
+                              <span className="font-medium text-text">
+                                {isByMe ? "You" : otherPartyName}
+                              </span>{" "}
+                              offered{" "}
+                              <span className="font-mono font-semibold tabular-nums text-warning">
+                                ₹{new Intl.NumberFormat("en-IN").format(offer.amount)}
+                              </span>
+                              {offer.message && (
+                                <span className="ml-1.5 italic text-text-tertiary">
+                                  "{offer.message}"
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-mono text-[11px] tabular-nums text-text-tertiary shrink-0">
+                              {new Date(offer.created_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
                             </span>
                           </div>
                         );
@@ -475,313 +708,341 @@ export default function DealsPage() {
 
                   {/* Confirmed Location Box (If Deal is Confirmed or Completed) */}
                   {["CONFIRMED", "COMPLETED"].includes(tx.state) && (
-                    <div className="mt-3 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs space-y-1">
-                      <p className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1">
-                        <span>🔓</span> Pickup Location Unlocked:
-                      </p>
-                      <p className="text-emerald-950 dark:text-emerald-100 font-medium">
-                        {tx.product?.pickup_area || "Meetup spot agreed with student counterparty."}
+                    <div className="mt-3 rounded-md border border-primary/20 bg-primary-subtle p-3 text-xs space-y-1">
+                      <div className="flex items-center gap-1.5 font-medium text-primary">
+                        <Unlock className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        <span>Pickup location confirmed</span>
+                      </div>
+                      <p className="text-text">
+                        {tx.product?.pickup_area || "Meetup spot agreed with counterparty."}
                       </p>
                     </div>
                   )}
 
                   {/* Double-Party Completion Tracker */}
                   {tx.state === "CONFIRMED" && (
-                    <div className="mt-3 p-3 bg-sand/60 dark:bg-stone-800/60 border border-ink/10 dark:border-stone-700 rounded-xl text-xs flex flex-wrap gap-4 items-center justify-between">
-                      <div className="flex gap-4">
-                        <span className={`inline-flex items-center gap-1 font-semibold ${
-                          tx.buyer_completed ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
-                        }`}>
-                          {tx.buyer_completed ? "✅ Buyer Signed Off" : "⏳ Buyer Pending"}
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-muted p-3 text-xs">
+                      <div className="flex items-center gap-4">
+                        <span
+                          className={`inline-flex items-center gap-1 font-medium ${
+                            tx.buyer_completed ? "text-success" : "text-text-tertiary"
+                          }`}
+                        >
+                          <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                          <span>Buyer sign-off</span>
                         </span>
-                        <span className={`inline-flex items-center gap-1 font-semibold ${
-                          tx.seller_completed ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
-                        }`}>
-                          {tx.seller_completed ? "✅ Seller Signed Off" : "⏳ Seller Pending"}
+                        <span
+                          className={`inline-flex items-center gap-1 font-medium ${
+                            tx.seller_completed ? "text-success" : "text-text-tertiary"
+                          }`}
+                        >
+                          <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                          <span>Seller sign-off</span>
                         </span>
                       </div>
-                      <p className="text-[11px] text-ink/50 dark:text-stone-400">Requires both sign-offs to complete</p>
+                      <span className="text-text-tertiary">Both sign-offs required to complete</span>
                     </div>
                   )}
 
-                  {/* Campus Meetup Handshake PIN Card */}
+                  {/* Campus Meetup Handshake PIN Card (Printable Pass) */}
                   {tx.state === "CONFIRMED" && (
-                    <div className="mt-3 p-4 sm:p-5 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/5 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-stone-900 border border-emerald-500/30 rounded-2xl">
-                      {isBuyer ? (
+                    <div className="printable-area mt-4 rounded-md border border-border bg-surface p-4 text-xs">
+                      <div className="flex items-center justify-between border-b border-border pb-3">
                         <div>
-                          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                            <span>🤝</span>
-                            <span>Campus Handshake Pass (Your Secret Handover PIN)</span>
+                          <div className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
+                            Handshake Pass
                           </div>
-                          <div className="flex flex-wrap items-center gap-3 mt-2">
-                            <span className="font-mono font-black text-xl tracking-widest text-emerald-950 dark:text-emerald-100 bg-white dark:bg-stone-800 px-4 py-1.5 rounded-xl border border-emerald-400 dark:border-emerald-600 shadow-xs">
-                              {tx.handshake_pin || "------"}
-                            </span>
-                            <span className="text-xs text-ink/75 dark:text-stone-300 max-w-md leading-relaxed">
-                              Show this PIN to the seller <strong>only upon meeting in person</strong> and physically verifying the item.
-                            </span>
+                          <div className="text-sm font-semibold text-text mt-0.5">
+                            Physical meetup verification
                           </div>
                         </div>
-                      ) : (
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                              <span>🤝</span>
-                              <span>Verify Buyer Meetup Handover</span>
-                            </div>
-                            <p className="text-xs text-ink/75 dark:text-stone-300 mt-1 max-w-md leading-relaxed">
-                              Ask the buyer for their 6-digit handshake PIN to verify the handover and immediately complete the deal.
-                            </p>
-                          </div>
 
-                          <div>
-                            {verifyTxId === tx.id ? (
-                              <div className="flex items-center gap-1.5 bg-white dark:bg-stone-800 p-1.5 rounded-xl border border-emerald-400 shadow-sm">
-                                <input
-                                  type="text"
-                                  maxLength={10}
-                                  placeholder="Enter PIN"
-                                  value={verifyPinInput}
-                                  onChange={(e) => setVerifyPinInput(e.target.value)}
-                                  className="w-24 px-2 py-1 text-xs font-mono font-bold border border-ink/20 dark:border-stone-600 rounded-lg text-ink dark:text-white dark:bg-stone-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                />
-                                <button
-                                  disabled={verifyingHandshake}
-                                  onClick={() => handleVerifyHandshake(tx.id)}
-                                  className="text-xs bg-emerald-700 text-white font-semibold px-2.5 py-1 rounded-lg hover:bg-emerald-800 disabled:opacity-50"
-                                >
-                                  {verifyingHandshake ? "Verifying…" : "Sign Off"}
-                                </button>
-                                <button
-                                  onClick={() => { setVerifyTxId(null); setVerifyPinInput(""); }}
-                                  className="text-xs text-ink/50 hover:text-ink px-1"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => { setVerifyTxId(tx.id); setVerifyPinInput(""); }}
-                                className="text-xs bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold px-3.5 py-2 rounded-xl hover:from-emerald-500 hover:to-teal-500 shadow-sm flex items-center gap-1.5 transition-all"
-                              >
-                                <span>🔑</span> Enter Buyer PIN
-                              </button>
-                            )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handlePrintReceipt}
+                            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:text-text"
+                            title="Print receipt"
+                          >
+                            <Printer className="h-3.5 w-3.5" strokeWidth={1.75} />
+                            <span>Print pass</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 py-3 sm:grid-cols-2">
+                        <div>
+                          <div className="text-text-tertiary">Agreed price</div>
+                          <div className="font-mono text-base font-semibold tabular-nums text-text mt-0.5">
+                            ₹{new Intl.NumberFormat("en-IN").format(agreedPrice)}
                           </div>
+                        </div>
+                        <div>
+                          <div className="text-text-tertiary">Pickup landmark</div>
+                          <div className="text-text mt-0.5">
+                            {tx.product?.pickup_area || "Agreed campus landmark"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {isBuyer ? (
+                        <div className="border-t border-border pt-3">
+                          <div className="text-text-tertiary mb-1">
+                            Your 6-digit handshake PIN
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="font-mono text-2xl font-bold tracking-[0.25em] text-text bg-surface-muted border border-border px-4 py-2 rounded-md">
+                              {tx.handshake_pin || "------"}
+                            </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleCopyPin(tx.handshake_pin || "", tx.id)}
+                            >
+                              <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
+                              <span>{copiedPinTxId === tx.id ? "Copied" : "Copy"}</span>
+                            </Button>
+                          </div>
+                          <p className="mt-2 text-xs text-text-tertiary">
+                            Show this PIN to the seller only after physically inspecting the item at the meetup location.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="border-t border-border pt-3">
+                          <div className="text-text-tertiary mb-1">
+                            Verify buyer handshake PIN
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              maxLength={6}
+                              placeholder="6-digit PIN"
+                              value={verifyTxId === tx.id ? verifyPinInput : ""}
+                              onChange={(e) => {
+                                setVerifyTxId(tx.id);
+                                setVerifyPinInput(e.target.value);
+                              }}
+                              className="h-10 w-36 rounded-md border border-border bg-surface px-3 font-mono text-sm tracking-widest text-text placeholder:text-text-tertiary focus:border-primary focus:outline-hidden"
+                            />
+                            <Button
+                              variant="primary"
+                              disabled={verifyingHandshake || verifyTxId !== tx.id || !verifyPinInput}
+                              onClick={() => handleVerifyHandshake(tx.id)}
+                            >
+                              <span>{verifyingHandshake ? "Verifying..." : "Verify & complete"}</span>
+                            </Button>
+                          </div>
+                          <p className="mt-2 text-xs text-text-tertiary">
+                            Ask the buyer for their PIN upon handing over the item to verify the exchange.
+                          </p>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Review / Rating UI for Completed Deals */}
+                  {/* Review / Rating for Completed Deals */}
                   {tx.state === "COMPLETED" && !reviewedTxIds.has(tx.id) && (
                     <div className="mt-3">
                       {reviewTxId === tx.id ? (
-                        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-3 animate-fade-in text-ink dark:text-sand">
-                          <h4 className="text-xs font-bold text-ink dark:text-white uppercase tracking-wider">Rate this transaction</h4>
+                        <div className="rounded-md border border-border bg-surface-muted p-4 space-y-3">
+                          <div className="text-xs font-semibold text-text">
+                            Rate your experience with {otherPartyName}
+                          </div>
                           <div className="flex items-center gap-1">
                             {[1, 2, 3, 4, 5].map((star) => (
                               <button
                                 key={star}
                                 type="button"
                                 onClick={() => setReviewRating(star)}
-                                className={`text-2xl transition-transform hover:scale-110 ${star <= reviewRating ? "text-amber-400" : "text-ink/15 dark:text-white/15"}`}
+                                className={`text-xl transition-colors ${
+                                  star <= reviewRating ? "text-warning" : "text-border-strong"
+                                }`}
                               >
                                 ★
                               </button>
                             ))}
-                            <span className="text-xs text-ink/60 dark:text-stone-400 ml-2">{reviewRating}/5</span>
+                            <span className="ml-2 font-mono text-xs tabular-nums text-text-secondary">
+                              {reviewRating}/5
+                            </span>
                           </div>
                           <textarea
-                            placeholder="How was your experience? (optional)"
+                            placeholder="Optional feedback..."
                             value={reviewComment}
                             onChange={(e) => setReviewComment(e.target.value)}
-                            className="w-full border border-ink/15 dark:border-stone-700 rounded-xl px-3 py-2 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss resize-none"
+                            className="w-full rounded-md border border-border bg-surface p-2.5 text-xs text-text placeholder:text-text-tertiary focus:border-primary focus:outline-hidden"
                             rows={2}
                           />
-                          <div className="flex gap-2 justify-end">
-                            <button
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => setReviewTxId(null)}
-                              className="text-xs px-3 py-1.5 border border-ink/20 dark:border-stone-700 rounded-xl text-ink dark:text-stone-300 hover:bg-white dark:hover:bg-stone-800"
                             >
                               Cancel
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                              variant="primary"
+                              size="sm"
                               disabled={submittingAction}
                               onClick={() => handleSubmitReview(tx.id)}
-                              className="text-xs bg-amber-500 text-white font-semibold px-4 py-1.5 rounded-xl hover:bg-amber-600 disabled:opacity-50"
                             >
-                              Submit Review
-                            </button>
+                              Submit review
+                            </Button>
                           </div>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => { setReviewTxId(tx.id); setReviewRating(5); setReviewComment(""); }}
-                          className="text-xs text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 font-semibold px-3.5 py-2 rounded-xl hover:bg-amber-500/20 transition-colors inline-flex items-center gap-1.5"
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setReviewTxId(tx.id);
+                            setReviewRating(5);
+                            setReviewComment("");
+                          }}
                         >
-                          ⭐ Leave a Review
-                        </button>
+                          <Star className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          <span>Leave a review</span>
+                        </Button>
                       )}
                     </div>
                   )}
+
                   {tx.state === "COMPLETED" && reviewedTxIds.has(tx.id) && (
-                    <p className="mt-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg font-medium inline-block">✅ Review submitted</p>
+                    <div className="mt-3 inline-flex items-center gap-1.5 text-xs text-success">
+                      <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                      <span>Review submitted</span>
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Counter Offer Form (Modal / Inline) */}
+              {/* Counter Offer Inline Form */}
               {counterTxId === tx.id && (
-                <div className="my-3 p-4 bg-sand/50 dark:bg-stone-800/60 border border-ink/10 dark:border-stone-700 rounded-xl space-y-3">
-                  <h4 className="text-xs font-bold text-ink dark:text-white uppercase tracking-wider">Propose Counter-Offer</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input
+                <div className="my-3 rounded-md border border-border bg-surface-muted p-4 space-y-3">
+                  <div className="text-xs font-semibold text-text">Propose counter-offer</div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Input
+                      label="Counter price (₹)"
                       type="number"
-                      placeholder="New proposed price (₹)"
+                      placeholder="e.g. 350"
                       value={counterAmount}
                       onChange={(e) => setCounterAmount(e.target.value)}
-                      className="border border-ink/20 dark:border-stone-700 dark:bg-stone-900 dark:text-white rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-moss"
                     />
-                    <input
-                      placeholder="Optional note (e.g. Can do ₹350 if we meet at hostel)"
+                    <Input
+                      label="Note to other party"
+                      placeholder="e.g. Can meet after 4 PM at library"
                       value={counterMsg}
                       onChange={(e) => setCounterMsg(e.target.value)}
-                      className="border border-ink/20 dark:border-stone-700 dark:bg-stone-900 dark:text-white rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-moss"
                     />
                   </div>
-                  <div className="flex gap-2 justify-end">
-                    <button
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setCounterTxId(null)}
-                      className="text-xs px-3 py-1.5 border border-ink/20 dark:border-stone-700 rounded-lg text-ink dark:text-stone-300 hover:bg-white dark:hover:bg-stone-800"
                     >
                       Cancel
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
                       disabled={!counterAmount || submittingAction}
-                      onClick={() => handleAction(tx.id, "counter", {
-                        counter_amount: Number(counterAmount),
-                        message: counterMsg || null,
-                      })}
-                      className="text-xs bg-moss text-white font-semibold px-4 py-1.5 rounded-lg disabled:opacity-50"
+                      onClick={() =>
+                        handleAction(tx.id, "counter", {
+                          counter_amount: Number(counterAmount),
+                          message: counterMsg || null,
+                        })
+                      }
                     >
-                      Submit Counter
-                    </button>
+                      Submit counter-offer
+                    </Button>
                   </div>
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="mt-2 pt-3 border-t border-ink/5 dark:border-stone-800 flex flex-wrap items-center justify-between gap-2">
+              {/* Bottom Action Strip */}
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
                 {needsMyResponse ? (
                   <div className="flex flex-wrap items-center gap-2">
                     {(tx.state === "PENDING" || tx.state === "COUNTERED") && (
                       <>
-                        <button
+                        <Button
+                          variant="primary"
+                          size="sm"
                           disabled={submittingAction}
                           onClick={() => handleAction(tx.id, "accept")}
-                          className="bg-moss text-white text-xs font-semibold px-3.5 py-2 rounded-lg hover:bg-moss/90 transition-colors shadow-sm touch-manipulation"
                         >
-                          ✓ Accept Offer
-                        </button>
-                        <button
+                          <Check className="h-4 w-4" strokeWidth={2} />
+                          <span>Accept offer</span>
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           disabled={submittingAction}
                           onClick={() => {
                             setCounterTxId(tx.id);
                             setCounterAmount(String(lastOffer?.amount || tx.agreed_price || ""));
                           }}
-                          className="bg-sand dark:bg-stone-800 border border-ink/20 dark:border-stone-700 text-ink dark:text-stone-200 text-xs font-semibold px-3.5 py-2 rounded-lg hover:bg-white dark:hover:bg-stone-700 transition-colors touch-manipulation"
                         >
-                          ⇄ Counter-Offer
-                        </button>
-                        <button
+                          <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} />
+                          <span>Counter</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           disabled={submittingAction}
                           onClick={() => handleAction(tx.id, "reject")}
-                          className="text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs font-semibold px-3.5 py-2 rounded-lg hover:bg-rose-100 transition-colors touch-manipulation"
                         >
-                          ✕ Decline
-                        </button>
+                          <span>Decline</span>
+                        </Button>
                       </>
                     )}
 
                     {tx.state === "ACCEPTED" && (
-                      <button
+                      <Button
+                        variant="primary"
+                        size="sm"
                         disabled={submittingAction}
                         onClick={() => handleAction(tx.id, "confirm")}
-                        className="bg-emerald-600 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
                       >
-                        🔓 Confirm Deal & Reveal Location
-                      </button>
+                        <Unlock className="h-4 w-4" strokeWidth={1.75} />
+                        <span>Confirm deal &amp; unlock location</span>
+                      </Button>
                     )}
 
                     {tx.state === "CONFIRMED" && (
-                      <button
+                      <Button
+                        variant="primary"
+                        size="sm"
                         disabled={submittingAction}
                         onClick={() => handleAction(tx.id, "complete")}
-                        className="bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-emerald-800 transition-colors shadow-sm"
                       >
-                        🤝 Sign Off Handover Complete
-                      </button>
+                        <Check className="h-4 w-4" strokeWidth={2} />
+                        <span>Sign off handover</span>
+                      </Button>
                     )}
                   </div>
                 ) : (
-                  <div className="text-xs text-ink/50 italic">
+                  <div className="text-xs text-text-tertiary">
                     {["PENDING", "COUNTERED"].includes(tx.state)
-                      ? "Awaiting response from other party…"
+                      ? "Awaiting counterparty response"
                       : tx.state === "CONFIRMED"
-                      ? "Waiting for counterparty to sign off completion…"
-                      : stateMeta.desc}
-                  </div>
-                )}
-
-                {/* Rental Return Lifecycle Banner & Action */}
-                {tx.state === "COMPLETED" && tx.product?.transaction_type === "RENT" && (
-                  <div className="flex flex-wrap items-center gap-2 mt-2 w-full justify-between bg-amber-500/10 dark:bg-amber-950/30 p-2.5 rounded-xl border border-amber-500/20">
-                    <div className="flex items-center gap-1.5 text-xs text-amber-900 dark:text-amber-200">
-                      <span>⏱️</span>
-                      <span className="font-semibold">
-                        {tx.rental_returned
-                          ? "Item returned and restored to campus active listings! 🔄"
-                          : `Rental period: ${tx.rental_period_days || 30} days`}
-                      </span>
-                      {tx.rental_due_date && !tx.rental_returned && (
-                        <span className="text-[11px] text-amber-700/80 dark:text-amber-300/80">
-                          (Due: {new Date(tx.rental_due_date).toLocaleDateString()})
-                        </span>
-                      )}
-                    </div>
-                    {!tx.rental_returned && isSeller && (
-                      <button
-                        disabled={submittingAction}
-                        onClick={async () => {
-                          if (confirm("Confirm that the rented item has been returned safely? This will reactivate the listing for other students.")) {
-                            try {
-                              await returnRentalItem(tx.id);
-                              showToast("Rental item marked returned! Listing is now active again. 🔄", "success");
-                              loadData();
-                            } catch (err: any) {
-                              showToast(err.message, "error");
-                            }
-                          }
-                        }}
-                        className="text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-xs"
-                      >
-                        Confirm Item Return 🔄
-                      </button>
-                    )}
+                      ? "Waiting for counterparty to sign off"
+                      : ""}
                   </div>
                 )}
 
                 {/* Cancel deal option for unfinalized transactions */}
                 {!["COMPLETED", "REJECTED", "CANCELLED"].includes(tx.state) && (
                   <button
+                    type="button"
                     disabled={submittingAction}
                     onClick={() => {
                       if (confirm("Are you sure you want to cancel this deal?")) {
                         handleAction(tx.id, "cancel");
                       }
                     }}
-                    className="text-xs text-ink/40 hover:text-clay transition-colors ml-auto"
+                    className="ml-auto text-xs text-text-tertiary hover:text-danger transition-colors"
                   >
                     Cancel deal
                   </button>

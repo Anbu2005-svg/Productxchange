@@ -88,7 +88,7 @@ export default function CampusMap({
         });
 
         L.marker([userCoords.lat, userCoords.lng], { icon: userIcon })
-          .bindTooltip("📍 You Are Here", { direction: "top", offset: [0, -10] })
+          .bindTooltip("Current location", { direction: "top", offset: [0, -10] })
           .addTo(userGroup);
 
         // Subtle radius zone circle
@@ -139,7 +139,6 @@ export default function CampusMap({
               gap:4px;
               transition:transform 0.15s ease;
             ">
-              <span>🏷️</span>
               <span>${priceDisplay}</span>
             </div>
           `;
@@ -186,7 +185,7 @@ export default function CampusMap({
   }
 
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-ink/10 shadow-sm bg-stone-50">
+    <div className="relative rounded-lg overflow-hidden border border-border bg-surface-muted">
       {/* Map Element */}
       <div ref={mapContainerRef} style={{ height, width: "100%", zIndex: 1 }} />
 
@@ -194,36 +193,37 @@ export default function CampusMap({
       <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
         <button
           onClick={handleRecenter}
-          className="bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-lg text-xs font-semibold text-ink/80 hover:text-moss border border-ink/10 shadow-md hover:bg-white transition-all flex items-center gap-1.5"
+          className="bg-surface px-3 py-1.5 rounded-md text-xs font-medium text-text border border-border shadow-xs hover:border-border-strong transition-colors flex items-center gap-1.5"
           title="Recenter map to campus"
         >
-          <span>🎯</span> Recenter
+          <span>Recenter</span>
         </button>
       </div>
 
       {/* Legend Badge */}
-      <div className="absolute top-3 left-3 z-10 bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm px-3 py-1.5 rounded-lg text-[11px] font-medium text-ink/70 dark:text-stone-300 border border-ink/10 dark:border-white/10 shadow-md flex items-center gap-3">
-        <span className="flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-moss inline-block" /> Listings
+      <div className="absolute top-3 left-3 z-10 bg-surface px-3 py-1.5 rounded-md text-xs font-medium text-text-secondary border border-border shadow-xs flex items-center gap-3">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-primary inline-block" /> Listings
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-clay inline-block" /> ~200m Privacy Zone
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-warning inline-block" /> ~200m Privacy zone
         </span>
       </div>
 
       {/* Active Product Popover Card */}
       {activeProduct && (
-        <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 md:left-auto md:right-4 md:w-80 z-20 bg-white dark:bg-stone-900 rounded-xl p-3.5 shadow-2xl border border-ink/15 dark:border-white/10 animate-fade-in">
+        <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 md:left-auto md:right-4 md:w-80 z-20 bg-surface rounded-lg p-3.5 shadow-md border border-border">
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-moss dark:text-emerald-400 bg-moss/10 dark:bg-moss/20 px-2 py-0.5 rounded-md inline-block mb-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary-subtle px-1.5 py-0.5 rounded inline-block mb-1">
                 {activeProduct.category}
               </span>
-              <h4 className="text-sm font-bold text-ink dark:text-white truncate">{activeProduct.title}</h4>
+              <h4 className="text-xs font-semibold text-text truncate">{activeProduct.title}</h4>
             </div>
             <button
               onClick={() => setActiveProduct(null)}
-              className="text-ink/40 dark:text-stone-400 hover:text-ink dark:hover:text-white text-xs p-1 rounded-md"
+              className="text-text-tertiary hover:text-text text-xs p-1 rounded"
+              aria-label="Close"
             >
               ✕
             </button>
@@ -234,27 +234,27 @@ export default function CampusMap({
               <img
                 src={resolveImageUrl(activeProduct.image_urls[0])}
                 alt={activeProduct.title}
-                className="w-14 h-14 rounded-lg object-cover border border-ink/10 dark:border-stone-700 shrink-0"
+                className="w-14 h-14 rounded-md object-cover border border-border shrink-0"
               />
             ) : (
-              <div className="w-14 h-14 rounded-lg bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-xl shrink-0">
-                📦
+              <div className="w-14 h-14 rounded-md bg-surface-muted border border-border flex items-center justify-center text-text-tertiary text-xs shrink-0 font-medium">
+                No photo
               </div>
             )}
             <div className="text-xs space-y-0.5 min-w-0">
-              <div className="font-extrabold text-moss dark:text-emerald-400 text-base">
+              <div className="font-semibold text-text text-sm font-mono tabular-nums">
                 {activeProduct.transaction_type === "DONATE"
                   ? "Free"
                   : activeProduct.price != null
-                  ? `₹${activeProduct.price}`
+                  ? `₹${new Intl.NumberFormat("en-IN").format(activeProduct.price)}`
                   : activeProduct.transaction_type}
               </div>
-              <div className="text-ink/60 dark:text-stone-400 text-[11px] truncate">
-                {activeProduct.condition || "Used"} • {activeProduct.pickup_area || "Campus Hub"}
+              <div className="text-text-secondary text-xs truncate">
+                {activeProduct.condition || "Used"} • {activeProduct.pickup_area || "Campus hub"}
               </div>
               {activeProduct.distance_m != null && (
-                <div className="text-[10px] text-clay font-medium">
-                  📍 ~{(activeProduct.distance_m / 1000).toFixed(1)} km from you
+                <div className="text-xs text-text-tertiary font-mono tabular-nums">
+                  ~{(activeProduct.distance_m / 1000).toFixed(1)} km away
                 </div>
               )}
             </div>
@@ -262,9 +262,9 @@ export default function CampusMap({
 
           <Link
             href={`/listings/${activeProduct.id}`}
-            className="block text-center w-full bg-moss text-white text-xs font-semibold py-2 rounded-lg hover:bg-moss/90 transition-colors shadow-sm touch-manipulation"
+            className="block text-center w-full bg-primary text-on-primary text-xs font-medium py-2 rounded-md hover:bg-primary-hover transition-colors"
           >
-            View Listing Details →
+            View listing
           </Link>
         </div>
       )}

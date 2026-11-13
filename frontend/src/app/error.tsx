@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import Button from "@/components/ui/Button";
+import { AlertCircle, RotateCw, Home } from "lucide-react";
 
 export default function GlobalError({
   error,
@@ -15,42 +17,40 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4 animate-fade-in-up">
-      <div className="animate-float mb-6">
-        <span className="text-7xl">⚠️</span>
+    <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 text-center">
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-subtle text-danger">
+        <AlertCircle className="h-6 w-6" strokeWidth={1.75} />
       </div>
 
-      <h1 className="text-3xl font-extrabold text-ink mb-2">
-        Something Went Wrong
-      </h1>
-      <p className="text-sm text-ink/60 max-w-md leading-relaxed mb-3">
-        An unexpected error occurred. This has been logged and we&apos;ll look into it.
+      <h1 className="text-xl font-semibold text-text">Something went wrong</h1>
+      <p className="mt-2 text-xs leading-relaxed text-text-secondary">
+        An unexpected error occurred while rendering this page. You can try refreshing or return to the campus feed.
       </p>
 
-      <div className="max-w-lg w-full mb-8">
-        <details className="bg-sand/60 border border-ink/10 rounded-xl p-3 text-left">
-          <summary className="text-xs font-semibold text-ink/60 cursor-pointer">
-            Technical Details
-          </summary>
-          <pre className="mt-2 text-[11px] text-ink/50 whitespace-pre-wrap break-all font-mono">
-            {error.message}
-            {error.digest && `\nDigest: ${error.digest}`}
-          </pre>
-        </details>
-      </div>
+      {error.message && (
+        <div className="my-4 w-full text-left">
+          <details className="rounded-md border border-border bg-surface-muted p-3 text-xs">
+            <summary className="cursor-pointer font-medium text-text-secondary">
+              Technical details
+            </summary>
+            <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-[11px] text-text-tertiary">
+              {error.message}
+              {error.digest && `\nDigest: ${error.digest}`}
+            </pre>
+          </details>
+        </div>
+      )}
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <button
-          onClick={reset}
-          className="inline-flex items-center gap-2 bg-moss text-white font-semibold text-sm px-6 py-3 rounded-xl hover:bg-moss/90 shadow-md transition-all"
-        >
-          <span>🔄</span> Try Again
-        </button>
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 bg-white border border-ink/15 text-ink font-semibold text-sm px-6 py-3 rounded-xl hover:border-moss hover:text-moss shadow-sm transition-all"
-        >
-          <span>🏠</span> Go Home
+      <div className="mt-2 flex items-center gap-3">
+        <Button variant="primary" size="sm" onClick={reset}>
+          <RotateCw className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <span>Try again</span>
+        </Button>
+        <Link href="/">
+          <Button variant="secondary" size="sm">
+            <Home className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <span>Campus feed</span>
+          </Button>
         </Link>
       </div>
     </div>

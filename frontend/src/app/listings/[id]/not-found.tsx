@@ -1,19 +1,25 @@
 import Link from "next/link";
+import Button from "@/components/ui/Button";
+import { Package, ArrowLeft } from "lucide-react";
 
 export default function ListingNotFound() {
   return (
-    <div className="min-h-[50vh] flex flex-col items-center justify-center text-center px-4 animate-fade-in-up">
-      <span className="text-6xl mb-4 animate-float">📦</span>
-      <h1 className="text-2xl font-bold text-ink mb-2">Listing Not Found</h1>
-      <p className="text-sm text-ink/60 max-w-sm leading-relaxed mb-6">
-        This listing may have been sold, removed, or is no longer available.
+    <div className="mx-auto flex min-h-[50vh] max-w-md flex-col items-center justify-center px-4 text-center">
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-surface-muted text-text-tertiary border border-border">
+        <Package className="h-6 w-6" strokeWidth={1.5} />
+      </div>
+      <h1 className="text-xl font-semibold text-text">Listing not found</h1>
+      <p className="mt-2 text-xs leading-relaxed text-text-secondary">
+        This listing may have been sold, removed by the owner, or is no longer available.
       </p>
-      <Link
-        href="/"
-        className="inline-flex items-center gap-2 bg-moss text-white font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-moss/90 shadow-sm transition-all"
-      >
-        Browse Other Items →
-      </Link>
+      <div className="mt-6">
+        <Link href="/">
+          <Button variant="primary" size="sm">
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <span>Browse campus feed</span>
+          </Button>
+        </Link>
+      </div>
     </div>
   );
 }

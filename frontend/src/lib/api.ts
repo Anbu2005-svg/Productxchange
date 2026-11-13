@@ -88,47 +88,15 @@ function escapeXml(unsafe: string): string {
 }
 
 export function getCategoryEmoji(category?: string | null): string {
-  const cat = (category || "").toLowerCase();
-  if (cat.includes("textbook") || cat.includes("book") || cat.includes("study")) return "📚";
-  if (cat.includes("electronic") || cat.includes("gadget") || cat.includes("calc")) return "💻";
-  if (cat.includes("lab") || cat.includes("equipment")) return "🔬";
-  if (cat.includes("hostel") || cat.includes("room")) return "🛏️";
-  if (cat.includes("cycle") || cat.includes("mobility")) return "🚲";
-  return "📦";
+  return "";
 }
 
 export function getCategoryFallbackImage(category?: string | null): string {
-  const cat = (category || "").toLowerCase();
-  let emoji = "📦";
-  let bgGradient1 = "#1b4332";
-  let bgGradient2 = "#081c15";
-  let accentColor = "#52b788";
-
-  if (cat.includes("textbook") || cat.includes("book") || cat.includes("study")) {
-    emoji = "📚"; bgGradient1 = "#1e3a8a"; bgGradient2 = "#172554"; accentColor = "#60a5fa";
-  } else if (cat.includes("electronic") || cat.includes("gadget") || cat.includes("calc")) {
-    emoji = "💻"; bgGradient1 = "#0f766e"; bgGradient2 = "#134e4a"; accentColor = "#2dd4bf";
-  } else if (cat.includes("lab") || cat.includes("equipment")) {
-    emoji = "🔬"; bgGradient1 = "#6d28d9"; bgGradient2 = "#4c1d95"; accentColor = "#c084fc";
-  } else if (cat.includes("hostel") || cat.includes("room")) {
-    emoji = "🛏️"; bgGradient1 = "#b45309"; bgGradient2 = "#78350f"; accentColor = "#fcd34d";
-  } else if (cat.includes("cycle") || cat.includes("mobility")) {
-    emoji = "🚲"; bgGradient1 = "#047857"; bgGradient2 = "#064e3b"; accentColor = "#6ee7b7";
-  }
-
-  const label = escapeXml(category || "Campus Item");
+  const label = escapeXml(category || "Listing");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="450" viewBox="0 0 600 450">
-    <defs>
-      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="${bgGradient1}"/>
-        <stop offset="100%" stop-color="${bgGradient2}"/>
-      </linearGradient>
-    </defs>
-    <rect width="600" height="450" fill="url(#g)"/>
-    <circle cx="300" cy="190" r="85" fill="#ffffff" fill-opacity="0.12"/>
-    <text x="300" y="218" font-size="76" text-anchor="middle">${emoji}</text>
-    <text x="300" y="325" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-weight="700" font-size="22" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">${label}</text>
-    <text x="300" y="360" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-weight="600" font-size="14" fill="${accentColor}" text-anchor="middle">ProductXchange Campus Verified</text>
+    <rect width="600" height="450" fill="#F3F3F0"/>
+    <rect x="250" y="165" width="100" height="75" rx="6" fill="#D2D1CA"/>
+    <text x="300" y="280" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-weight="500" font-size="16" fill="#4D5551" text-anchor="middle">${label}</text>
   </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
@@ -258,6 +226,16 @@ export type Product = {
   is_expired?: boolean;
   can_bump?: boolean;
   is_saved?: boolean;
+  seller?: {
+    id: number;
+    full_name?: string | null;
+    email?: string | null;
+    college?: string | null;
+    avatar_url?: string | null;
+    is_verified?: boolean;
+    avg_rating?: number | null;
+    trust_score?: number | null;
+  } | null;
 };
 
 export type Offer = {

@@ -3,24 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Offline — ProductXchange Campus</title>
-  <meta name="theme-color" content="#2f6b4f">
+  <title>Offline — ProductXchange</title>
+  <meta name="theme-color" content="#2F6B4F">
   <style>
     :root {
-      --moss: #2f6b4f;
-      --moss-dark: #1e4d38;
-      --emerald: #10b981;
-      --sand: #f6f3ec;
-      --ink: #1c2b24;
-      --card-bg: #ffffff;
-      --border: rgba(28, 43, 36, 0.1);
+      --bg: #FAFAF8;
+      --surface: #FFFFFF;
+      --surface-muted: #F3F3F0;
+      --border: #E6E5E0;
+      --text: #161A18;
+      --text-secondary: #4D5551;
+      --text-tertiary: #6B726E;
+      --primary: #2F6B4F;
+      --primary-hover: #265A42;
+      --primary-subtle: #EEF5F1;
+      --on-primary: #FFFFFF;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --sand: #131a16;
-        --ink: #eaf1ed;
-        --card-bg: #1b241f;
-        --border: rgba(255, 255, 255, 0.1);
+        --bg: #0F1211;
+        --surface: #161A18;
+        --surface-muted: #1D2220;
+        --border: #2A302D;
+        --text: #ECEFED;
+        --text-secondary: #A9B1AC;
+        --text-tertiary: #8A928D;
+        --primary: #5BB98C;
+        --primary-hover: #74C9A0;
+        --primary-subtle: #16261F;
+        --on-primary: #0B1410;
       }
     }
     * {
@@ -30,9 +41,9 @@
       -webkit-tap-highlight-color: transparent;
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--sand);
-      color: var(--ink);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
       min-height: 100vh;
       min-height: 100dvh;
       display: flex;
@@ -43,141 +54,123 @@
       text-align: center;
     }
     .card {
-      background: var(--card-bg);
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 1.5rem;
-      padding: 2.5rem 2rem;
-      max-width: 440px;
+      border-radius: 8px;
+      padding: 2rem;
+      max-width: 400px;
       width: 100%;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.06);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 1.25rem;
+      gap: 1rem;
     }
     .icon-wrapper {
-      position: relative;
-      width: 72px;
-      height: 72px;
-      border-radius: 1.25rem;
-      background: linear-gradient(135deg, #2f6b4f, #1b4332);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 2rem;
-      color: #fff;
-      box-shadow: 0 6px 16px rgba(47, 107, 79, 0.3);
-    }
-    .offline-badge {
-      position: absolute;
-      bottom: -4px;
-      right: -4px;
-      width: 24px;
-      height: 24px;
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
-      background: #f59e0b;
-      border: 2px solid var(--card-bg);
+      background: var(--primary-subtle);
+      color: var(--primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 11px;
     }
     h1 {
-      font-size: 1.5rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
     }
     p {
-      font-size: 0.925rem;
+      font-size: 0.875rem;
       line-height: 1.5;
-      opacity: 0.8;
-      max-width: 360px;
+      color: var(--text-secondary);
     }
     .btn-primary {
       width: 100%;
-      padding: 0.85rem 1.25rem;
-      border-radius: 0.875rem;
+      height: 40px;
+      border-radius: 6px;
       border: none;
-      background: linear-gradient(135deg, #2f6b4f, #10b981);
-      color: #fff;
-      font-weight: 700;
-      font-size: 0.95rem;
+      background: var(--primary);
+      color: var(--on-primary);
+      font-weight: 500;
+      font-size: 0.875rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
-      transition: transform 0.15s, opacity 0.15s;
+      transition: background-color 150ms ease-out;
     }
-    .btn-primary:active {
-      transform: scale(0.98);
-      opacity: 0.9;
+    .btn-primary:hover {
+      background: var(--primary-hover);
     }
     .btn-secondary {
-      width: 100%;
-      padding: 0.75rem 1.25rem;
-      border-radius: 0.875rem;
+      flex: 1;
+      height: 40px;
+      border-radius: 6px;
       border: 1px solid var(--border);
-      background: transparent;
-      color: var(--ink);
-      font-weight: 600;
-      font-size: 0.9rem;
+      background: var(--surface);
+      color: var(--text);
+      font-weight: 500;
+      font-size: 0.875rem;
       cursor: pointer;
       text-decoration: none;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      transition: border-color 150ms ease-out;
     }
-    .status-indicator {
+    .btn-secondary:hover {
+      border-color: var(--text-secondary);
+    }
+    .status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: #f59e0b;
-      background: rgba(245, 158, 11, 0.12);
-      padding: 0.35rem 0.85rem;
-      border-radius: 9999px;
+      gap: 0.375rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-tertiary);
     }
     .dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
-      background: #f59e0b;
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
+      background: var(--text-tertiary);
     }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="icon-wrapper">
-      🔄
-      <div class="offline-badge">⚡</div>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="1" y1="1" x2="23" y2="23"></line>
+        <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+        <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+        <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+        <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+        <line x1="12" y1="20" x2="12.01" y2="20"></line>
+      </svg>
     </div>
     
-    <div class="status-indicator">
+    <div class="status-badge">
       <span class="dot"></span>
-      <span>No Internet Connection</span>
+      <span>No internet connection</span>
     </div>
 
     <h1>You Are Offline</h1>
     
     <p>
-      ProductXchange keeps your previously visited deals, saved watchlist, and verified Handshake PINs stored locally on your device.
+      Cached campus listings, your active deals, and saved handshake PINs remain available offline on this device.
     </p>
 
     <button class="btn-primary" onclick="checkConnection()">
-      <span>↻</span>
-      <span>Retry Connection</span>
+      Retry connection
     </button>
 
     <div style="display: flex; gap: 0.5rem; width: 100%;">
-      <a href="/deals" class="btn-secondary">🤝 My Deals</a>
-      <a href="/saved" class="btn-secondary">❤️ Saved Items</a>
+      <a href="/deals" class="btn-secondary">My deals</a>
+      <a href="/saved" class="btn-secondary">Saved</a>
     </div>
   </div>
 
@@ -186,22 +179,19 @@
       if (navigator.onLine) {
         window.location.reload();
       } else {
-        const btn = document.querySelector('.btn-primary span:last-child');
+        const btn = document.querySelector('.btn-primary');
         const orig = btn.textContent;
         btn.textContent = 'Still offline...';
         setTimeout(() => { btn.textContent = orig; }, 1500);
       }
     }
 
-    // Auto-reload as soon as internet connection is restored
     window.addEventListener('online', () => {
-      document.querySelector('.status-indicator span:last-child').textContent = 'Reconnecting...';
-      document.querySelector('.dot').style.background = '#10b981';
+      document.querySelector('.status-badge span:last-child').textContent = 'Reconnecting...';
       setTimeout(() => {
         window.location.reload();
-      }, 600);
+      }, 500);
     });
   </script>
 </body>
 </html>
-

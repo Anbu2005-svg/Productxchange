@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { api, getToken, API_BASE } from "@/lib/api";
+import { Bell, CheckCheck, MessageSquare, Handshake, CheckCircle2, Star } from "lucide-react";
 
 type NotificationItem = {
   id: number;
@@ -14,15 +15,6 @@ type NotificationItem = {
   created_at: string;
 };
 
-const TYPE_ICONS: Record<string, string> = {
-  OFFER_RECEIVED: "📩",
-  OFFER_ACCEPTED: "✅",
-  DEAL_CONFIRMED: "🔓",
-  DEAL_COMPLETED: "🤝",
-  NEW_MESSAGE: "💬",
-  REVIEW_RECEIVED: "⭐",
-};
-
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -32,6 +24,24 @@ function timeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function getNotificationIcon(type: string) {
+  switch (type) {
+    case "OFFER_RECEIVED":
+    case "COUNTER_OFFER":
+    case "DEAL_CONFIRMED":
+    case "DEAL_COMPLETED":
+      return <Handshake className="w-4 h-4 text-primary" />;
+    case "OFFER_ACCEPTED":
+      return <CheckCircle2 className="w-4 h-4 text-success" />;
+    case "NEW_MESSAGE":
+      return <MessageSquare className="w-4 h-4 text-info" />;
+    case "REVIEW_RECEIVED":
+      return <Star className="w-4 h-4 text-warning" />;
+    default:
+      return <Bell className="w-4 h-4 text-text-tertiary" />;
+  }
 }
 
 export default function NotificationBell() {
@@ -49,7 +59,6 @@ export default function NotificationBell() {
     } catch {}
   }, []);
 
-  // Connect to live notification WebSocket with background polling fallback
   useEffect(() => {
     fetchUnreadCount();
 
@@ -96,7 +105,6 @@ export default function NotificationBell() {
 
     connectWs();
 
-    // Only poll when browser tab is active/visible (conserves battery and bandwidth for 5M users)
     const interval = setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") {
         fetchUnreadCount();
@@ -125,7 +133,6 @@ export default function NotificationBell() {
     };
   }, [fetchUnreadCount]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -140,7 +147,6 @@ export default function NotificationBell() {
 
   async function toggleDropdown() {
     if (!isOpen) {
-      // Fetch full notifications list
       try {
         const list = await api("/notifications");
         setNotifications(list);
@@ -170,92 +176,77 @@ export default function NotificationBell() {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Bell Button */}
       <button
         onClick={toggleDropdown}
-        className="relative p-1.5 rounded-lg hover:bg-sand/60 transition-colors"
+        className="relative p-2 rounded-sm text-text-secondary hover:text-text hover:bg-surface-muted transition-colors focus-visible:outline-2 focus-visible:outline-primary"
+        aria-label="Notifications"
         title="Notifications"
       >
-        <svg
-          className="w-5 h-5 text-ink/60 hover:text-moss transition-colors"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={1.8}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"
-          />
-        </svg>
-
-        {/* Badge */}
+        <Bell className="w-5 h-5" strokeWidth={1.75} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 bg-clay text-white text-[10px] font-bold w-4.5 h-4.5 min-w-[18px] flex items-center justify-center rounded-full leading-none px-1 animate-scale-in">
-            {unreadCount > 9 ? "9+" : unreadCount}
+          <span className="absolute top-1 right-1 bg-primary text-primary-fg text-[10px] font-semibold h-4 min-w-[16px] px-1 flex items-center justify-center rounded-full leading-none tabular-nums">
+            {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 max-h-96 bg-white border border-ink/10 rounded-xl shadow-xl z-[60] overflow-hidden animate-scale-in">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-ink/10">
-            <h3 className="text-sm font-bold text-ink">Notifications</h3>
+        <div className="absolute right-0 top-full mt-2 w-80 max-h-96 bg-surface border border-border rounded-md shadow-overlay z-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <h3 className="text-xs font-semibold text-text uppercase tracking-wider">
+              Notifications
+            </h3>
             {unreadCount > 0 && (
               <button
+                type="button"
                 onClick={markAllRead}
-                className="text-[11px] text-moss font-semibold hover:underline"
+                className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline"
               >
-                Mark all read
+                <CheckCheck className="w-3.5 h-3.5" />
+                <span>Mark all read</span>
               </button>
             )}
           </div>
 
-          {/* Notifications List */}
           <div className="overflow-y-auto max-h-72">
             {!loaded ? (
-              <div className="py-8 text-center text-sm text-ink/50 animate-pulse">
-                Loading…
+              <div className="py-8 text-center text-xs text-text-tertiary">
+                Loading notifications…
               </div>
             ) : notifications.length === 0 ? (
-              <div className="py-8 text-center">
-                <span className="text-3xl block mb-2">🔔</span>
-                <p className="text-sm text-ink/50">No notifications yet</p>
+              <div className="py-8 text-center text-xs text-text-tertiary">
+                No notifications
               </div>
             ) : (
               notifications.map((n) => {
-                const icon = TYPE_ICONS[n.type] || "🔔";
                 const content = (
                   <div
-                    className={`flex items-start gap-3 px-4 py-3 border-b border-ink/5 transition-colors cursor-pointer ${
+                    className={`flex items-start gap-3 px-4 py-3 border-b border-border last:border-b-0 transition-colors cursor-pointer ${
                       n.is_read
-                        ? "bg-white hover:bg-sand/30"
-                        : "bg-moss/[0.03] hover:bg-moss/[0.06]"
+                        ? "bg-surface hover:bg-surface-muted"
+                        : "bg-primary-subtle/50 hover:bg-primary-subtle"
                     }`}
                     onClick={() => {
                       if (!n.is_read) markAsRead(n.id);
                       setIsOpen(false);
                     }}
                   >
-                    <span className="text-base mt-0.5 shrink-0">{icon}</span>
+                    <span className="mt-0.5 shrink-0">{getNotificationIcon(n.type)}</span>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-xs leading-snug ${n.is_read ? "text-ink/70" : "text-ink font-semibold"}`}>
+                      <p className={`text-xs leading-snug ${n.is_read ? "text-text-secondary" : "text-text font-semibold"}`}>
                         {n.title}
                       </p>
                       {n.message && (
-                        <p className="text-[11px] text-ink/50 mt-0.5 line-clamp-2">
+                        <p className="text-xs text-text-tertiary mt-0.5 line-clamp-2">
                           {n.message}
                         </p>
                       )}
-                      <p className="text-[10px] text-ink/40 mt-1">
+                      <p className="text-[11px] text-text-tertiary mt-1">
                         {timeAgo(n.created_at)}
                       </p>
                     </div>
                     {!n.is_read && (
-                      <span className="w-2 h-2 bg-moss rounded-full mt-1.5 shrink-0" />
+                      <span className="w-1.5 h-1.5 bg-primary rounded-full mt-1.5 shrink-0" />
                     )}
                   </div>
                 );

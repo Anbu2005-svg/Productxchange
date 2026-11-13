@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { api, logout, getToken, User, getCampuses, resolveImageUrl } from "@/lib/api";
 import NotificationBell from "@/components/NotificationBell";
+import { Sun, Moon, Plus, ChevronDown, Shield, LogOut, Menu, X, MessageSquare, Search } from "lucide-react";
 
 export default function Navbar() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function Navbar() {
   const [campuses, setCampuses] = useState<{ college: string; count: number }[]>([]);
   const [selectedCampus, setSelectedCampus] = useState("ALL");
   const [campusDropdownOpen, setCampusDropdownOpen] = useState(false);
+  const campusMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getCampuses()
@@ -28,6 +30,18 @@ export default function Navbar() {
       setSelectedCampus(savedCampus);
     }
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (campusMenuRef.current && !campusMenuRef.current.contains(e.target as Node)) {
+        setCampusDropdownOpen(false);
+      }
+    }
+    if (campusDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [campusDropdownOpen]);
 
   function handleSelectCampus(campus: string) {
     setSelectedCampus(campus);
@@ -84,7 +98,6 @@ export default function Navbar() {
       .finally(() => setLoading(false));
   }, [pathname]);
 
-  // Close menu on route change
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
@@ -97,79 +110,70 @@ export default function Navbar() {
   }
 
   const navLinks = [
-    { href: "/", label: "Nearby", icon: "📍" },
-    { href: "/saved", label: "Saved", icon: "❤️" },
-    { href: "/deals", label: "Deals", icon: "🤝" },
-    { href: "/chat", label: "Chat", icon: "💬", badge: unreadChatCount },
-    { href: "/impact", label: "Eco-Impact", icon: "🌱" },
+    { href: "/", label: "Nearby" },
+    { href: "/deals", label: "Deals" },
+    { href: "/impact", label: "Eco-Impact" },
+    { href: "/saved", label: "Saved" },
   ];
 
   return (
-    <header className="border-b border-ink/8 dark:border-white/10 bg-white/85 dark:bg-[#131a16]/85 backdrop-blur-xl sticky top-0 z-50 transition-colors shadow-xs">
-      <nav className="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-6">
-          <Link href="/" className="font-extrabold text-xl tracking-tight flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 flex items-center justify-center text-white text-base shadow-sm group-hover:scale-105 transition-transform">
-              🔄
-            </div>
-            <span className="text-emerald-700 dark:text-emerald-400 font-black">
-              Product<span className="text-ink dark:text-sand font-bold">Xchange</span>
-            </span>
-            <span className="hidden lg:inline-block text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 uppercase tracking-widest">
-              Campus
-            </span>
+    <header className="h-14 bg-surface border-b border-border sticky top-0 z-40 transition-colors">
+      <nav className="max-w-[1200px] h-full mx-auto flex items-center justify-between px-4 md:px-6">
+        {/* Left: Wordmark & Main Nav */}
+        <div className="flex items-center gap-6 h-full">
+          <Link
+            href="/"
+            className="text-base font-bold tracking-tight text-text flex items-center gap-1.5 focus-visible:outline-primary"
+          >
+            <span>ProductXchange</span>
           </Link>
 
-          {/* Desktop Nav Links */}
+          {/* Desktop Nav Links: 2px underline when active */}
           {user && (
-            <div className="hidden sm:flex items-center gap-1">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`text-sm font-semibold px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 relative ${
-                    pathname === link.href
-                      ? "text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-500/20"
-                      : "text-ink/65 dark:text-stone-300 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/5 dark:hover:bg-emerald-500/10"
-                  }`}
-                >
-                  <span className="text-sm">{link.icon}</span>
-                  {link.label}
-                  {Boolean(link.badge && link.badge > 0) && (
-                    <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
-                      {link.badge}
-                    </span>
-                  )}
-                </Link>
-              ))}
-              {/* Multi-Campus Selector Switcher */}
-              <div className="relative">
+            <div className="hidden md:flex items-center gap-1 h-full">
+              {navLinks.map((link) => {
+                const isActive = pathname === link.href;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`h-full flex items-center px-3 text-sm transition-colors border-b-2 -mb-px ${
+                      isActive
+                        ? "border-primary text-text font-semibold"
+                        : "border-transparent text-text-secondary hover:text-text hover:border-border"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+
+              {/* Campus Selector Dropdown */}
+              <div className="relative ml-2" ref={campusMenuRef}>
                 <button
                   type="button"
                   onClick={() => setCampusDropdownOpen(!campusDropdownOpen)}
-                  className="hidden md:flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-ink/10 dark:border-white/10 bg-sand/60 dark:bg-stone-800 text-ink/80 dark:text-stone-200 hover:border-emerald-500/40 transition-all shadow-2xs"
-                  title="Filter by college campus"
+                  className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text px-2 py-1 rounded-sm border border-border bg-surface-muted transition-colors"
                 >
-                  <span>🏫</span>
-                  <span className="max-w-[130px] truncate">
-                    {selectedCampus === "ALL" ? "All Campuses" : selectedCampus}
+                  <span className="max-w-[120px] truncate">
+                    {selectedCampus === "ALL" ? "All campuses" : selectedCampus}
                   </span>
-                  <span className="text-[10px] text-ink/40 dark:text-stone-400">▾</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-text-tertiary" />
                 </button>
 
                 {campusDropdownOpen && (
-                  <div className="absolute top-full mt-1.5 left-0 w-64 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl shadow-xl py-1 z-50 text-xs">
-                    <div className="px-3 py-1.5 border-b border-ink/5 dark:border-stone-800 font-bold text-ink/50 dark:text-stone-400 text-[10px] uppercase tracking-wider">
-                      Select Campus Hub
+                  <div className="absolute top-full mt-1.5 left-0 w-64 bg-surface border border-border rounded-md shadow-overlay py-1 z-50 text-xs">
+                    <div className="px-3 py-1.5 border-b border-border text-[11px] font-medium text-text-tertiary uppercase tracking-wider">
+                      Campus filter
                     </div>
                     <button
                       type="button"
                       onClick={() => handleSelectCampus("ALL")}
-                      className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
-                        selectedCampus === "ALL" ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
+                      className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-surface-muted transition-colors ${
+                        selectedCampus === "ALL" ? "font-semibold text-primary" : "text-text"
                       }`}
                     >
-                      <span>🌐 All Bangalore Campuses</span>
+                      <span>All campuses</span>
                       {selectedCampus === "ALL" && <span>✓</span>}
                     </button>
 
@@ -177,11 +181,11 @@ export default function Navbar() {
                       <button
                         type="button"
                         onClick={() => handleSelectCampus(user.college!)}
-                        className={`w-full text-left px-3 py-2 flex items-center justify-between border-t border-b border-ink/5 dark:border-stone-800 hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
-                          selectedCampus === user.college ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
+                        className={`w-full text-left px-3 py-2 flex items-center justify-between border-t border-b border-border hover:bg-surface-muted transition-colors ${
+                          selectedCampus === user.college ? "font-semibold text-primary" : "text-text"
                         }`}
                       >
-                        <span className="truncate">🎓 My Campus: {user.college}</span>
+                        <span className="truncate">My campus: {user.college}</span>
                         {selectedCampus === user.college && <span>✓</span>}
                       </button>
                     )}
@@ -192,12 +196,14 @@ export default function Navbar() {
                           key={c.college}
                           type="button"
                           onClick={() => handleSelectCampus(c.college)}
-                          className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-sand dark:hover:bg-stone-800 transition-colors ${
-                            selectedCampus === c.college ? "font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "text-ink dark:text-white"
+                          className={`w-full text-left px-3 py-1.5 flex items-center justify-between hover:bg-surface-muted transition-colors ${
+                            selectedCampus === c.college ? "font-semibold text-primary" : "text-text"
                           }`}
                         >
                           <span className="truncate pr-2">{c.college}</span>
-                          <span className="text-[10px] text-ink/40 dark:text-stone-400 font-mono">{c.count} items</span>
+                          <span className="text-[11px] text-text-tertiary tabular-nums font-mono">
+                            {c.count}
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -208,228 +214,189 @@ export default function Navbar() {
           )}
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 text-sm">
-          {/* Dark Mode Toggle Button */}
+        {/* Right: Actions & User Controls */}
+        <div className="flex items-center gap-2 text-sm">
+          {/* Theme Toggle */}
           <button
+            type="button"
             onClick={toggleTheme}
-            className="p-2 rounded-xl text-ink/70 dark:text-stone-300 hover:bg-sand dark:hover:bg-stone-800 transition-colors"
-            title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            aria-label="Toggle Theme"
+            className="p-2 rounded-sm text-text-secondary hover:text-text hover:bg-surface-muted transition-colors"
+            aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+            title={isDark ? "Light theme" : "Dark theme"}
           >
-            {isDark ? "☀️" : "🌙"}
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
-          {/* Desktop Sell Button */}
+          {/* Desktop Search Link */}
+          {user && (
+            <Link
+              href="/"
+              className="hidden sm:flex p-2 rounded-sm text-text-secondary hover:text-text hover:bg-surface-muted transition-colors"
+              aria-label="Search"
+              title="Search"
+            >
+              <Search className="w-4 h-4" />
+            </Link>
+          )}
+
+          {/* Desktop Sell Button (Solid Primary) */}
           {user && (
             <Link
               href="/listings/new"
-              className="hidden sm:inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-95"
+              className="hidden sm:inline-flex items-center gap-1.5 h-8 px-3 rounded-sm bg-primary text-primary-fg text-xs font-medium hover:bg-primary-hover transition-colors"
             >
-              <span>+</span> Sell Item
+              <Plus className="w-3.5 h-3.5" strokeWidth={2} />
+              <span>Sell</span>
             </Link>
           )}
 
           {!loading && user ? (
-            <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-ink/10 dark:border-stone-700">
+            <div className="flex items-center gap-1">
               <NotificationBell />
-              <Link href="/profile" className="flex items-center gap-1.5 text-xs text-ink/80 dark:text-stone-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500/20 to-teal-100 dark:from-emerald-950 dark:to-stone-800 flex items-center justify-center font-bold text-[11px] text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 overflow-hidden ring-1 ring-emerald-500/20">
+
+              <Link
+                href="/chat"
+                className="relative hidden sm:flex p-2 rounded-sm text-text-secondary hover:text-text hover:bg-surface-muted transition-colors"
+                aria-label="Chat conversations"
+                title="Chat"
+              >
+                <MessageSquare className="w-4 h-4" />
+                {unreadChatCount > 0 && (
+                  <span className="absolute top-1 right-1 bg-primary text-primary-fg text-[10px] font-semibold h-4 min-w-[16px] px-1 flex items-center justify-center rounded-full leading-none tabular-nums">
+                    {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                  </span>
+                )}
+              </Link>
+
+              {user.is_admin && (
+                <Link
+                  href="/admin"
+                  className="hidden sm:flex p-2 rounded-sm text-text-secondary hover:text-text hover:bg-surface-muted transition-colors"
+                  title="Admin"
+                >
+                  <Shield className="w-4 h-4" />
+                </Link>
+              )}
+
+              {/* User Avatar */}
+              <Link
+                href="/profile"
+                className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-sm text-xs text-text hover:bg-surface-muted transition-colors"
+              >
+                <div className="w-6 h-6 rounded-full bg-surface-muted border border-border flex items-center justify-center font-medium text-xs text-text overflow-hidden">
                   {user.avatar_url ? (
-                    <img src={resolveImageUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
+                    <img
+                      src={resolveImageUrl(user.avatar_url)}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     user.full_name?.charAt(0) || user.email.charAt(0).toUpperCase()
                   )}
                 </div>
-                <span className="font-semibold hidden md:inline">{user.full_name || user.email.split("@")[0]}</span>
+                <span className="hidden lg:inline text-xs font-medium max-w-[100px] truncate">
+                  {user.full_name || user.email.split("@")[0]}
+                </span>
               </Link>
-              {user.is_admin && (
-                <Link href="/admin" className="text-[11px] text-ink/40 dark:text-stone-400 hover:text-emerald-600 dark:hover:text-emerald-400 font-medium transition-colors" title="Admin Dashboard">
-                  🛡️
-                </Link>
-              )}
+
               <button
+                type="button"
                 onClick={handleLogout}
-                className="text-xs text-ink/50 dark:text-stone-400 hover:text-clay transition-colors"
+                className="hidden sm:flex p-2 rounded-sm text-text-tertiary hover:text-danger hover:bg-surface-muted transition-colors"
                 title="Log out"
+                aria-label="Log out"
               >
-                Log out
+                <LogOut className="w-4 h-4" />
               </button>
             </div>
           ) : !loading ? (
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <Link
                 href="/login"
-                className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-ink/20 dark:border-stone-700 text-ink dark:text-stone-200 hover:border-moss hover:text-moss transition-colors"
+                className="h-8 px-3 rounded-sm text-xs font-medium text-text hover:bg-surface-muted transition-colors flex items-center"
               >
-                Log In
+                Log in
               </Link>
               <Link
                 href="/register"
-                className="text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white transition-all shadow-xs"
+                className="h-8 px-3 rounded-sm bg-primary text-primary-fg text-xs font-medium hover:bg-primary-hover transition-colors flex items-center"
               >
-                Join
+                Sign up
               </Link>
             </div>
           ) : null}
 
-          {/* Mobile Notification Bell */}
-          {!loading && user && (
-            <div className="sm:hidden flex items-center">
-              <NotificationBell />
-            </div>
-          )}
-
-          {/* Mobile Hamburger Button */}
+          {/* Mobile Menu Button */}
           <button
+            type="button"
             onClick={() => setMenuOpen(!menuOpen)}
-            className="sm:hidden flex flex-col items-center justify-center w-9 h-9 gap-1 rounded-lg hover:bg-sand dark:hover:bg-stone-800 transition-colors p-1"
-            aria-label="Toggle menu"
+            className="md:hidden p-2 rounded-sm text-text-secondary hover:text-text hover:bg-surface-muted transition-colors"
+            aria-label="Toggle navigation menu"
           >
-            <span
-              className={`block w-5 h-0.5 bg-ink/80 dark:bg-stone-200 rounded-full transition-all duration-200 ${
-                menuOpen ? "rotate-45 translate-y-[3px]" : ""
-              }`}
-            />
-            <span
-              className={`block w-5 h-0.5 bg-ink/80 dark:bg-stone-200 rounded-full transition-all duration-200 ${
-                menuOpen ? "opacity-0" : ""
-              }`}
-            />
-            <span
-              className={`block w-5 h-0.5 bg-ink/80 dark:bg-stone-200 rounded-full transition-all duration-200 ${
-                menuOpen ? "-rotate-45 -translate-y-[3px]" : ""
-              }`}
-            />
+            {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </nav>
 
-      {/* Mobile Slide-Down Menu */}
+      {/* Mobile Menu Dropdown */}
       {menuOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="sm:hidden fixed inset-0 top-[57px] bg-black/40 backdrop-blur-xs z-40"
-            onClick={() => setMenuOpen(false)}
-          />
-
-          <div className="sm:hidden absolute left-0 right-0 top-full bg-white dark:bg-stone-900 border-b border-ink/10 dark:border-white/10 shadow-2xl z-50 animate-slide-down max-h-[calc(100dvh-60px)] overflow-y-auto">
-            <div className="max-w-5xl mx-auto px-4 py-4 space-y-1.5">
-              {user && (
-                <>
-                  {/* Campus Selector in Mobile Menu */}
-                  <div className="pb-2 border-b border-ink/10 dark:border-stone-800">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-ink/50 dark:text-stone-400 block mb-1.5 px-1">
-                      🏫 Campus Hub
-                    </label>
-                    <select
-                      value={selectedCampus}
-                      onChange={(e) => handleSelectCampus(e.target.value)}
-                      className="w-full bg-sand/60 dark:bg-stone-800 border border-ink/10 dark:border-stone-700 rounded-xl px-3 py-2 text-xs font-semibold text-ink dark:text-white focus:outline-none focus:border-moss"
-                    >
-                      <option value="ALL">🌐 All Campuses (Bangalore)</option>
-                      {user?.college && (
-                        <option value={user.college}>🎓 My Campus ({user.college})</option>
-                      )}
-                      {campuses.map((c) => (
-                        <option key={c.college} value={c.college}>
-                          {c.college} ({c.count} items)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {navLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                        pathname === link.href
-                          ? "text-moss dark:text-emerald-400 bg-moss/10 dark:bg-moss/20 font-bold"
-                          : "text-ink/80 dark:text-stone-200 hover:text-moss dark:hover:text-emerald-400 hover:bg-sand/60 dark:hover:bg-stone-800"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-base">{link.icon}</span>
-                        {link.label}
-                      </div>
-                      {Boolean(link.badge && link.badge > 0) && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white animate-pulse">
-                          {link.badge}
-                        </span>
-                      )}
-                    </Link>
-                  ))}
-
-                  <Link
-                    href="/listings/new"
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-white bg-moss hover:bg-moss/90 transition-colors shadow-sm"
-                  >
-                    <span className="text-base">➕</span>
-                    Sell / List Item
-                  </Link>
-                </>
-              )}
-
-              <div className="border-t border-ink/10 dark:border-stone-800 pt-3 mt-2">
-                {user ? (
-                  <div className="space-y-1">
-                    <Link
-                      href="/profile"
-                      className="flex items-center justify-between p-2.5 rounded-xl hover:bg-sand/60 dark:hover:bg-stone-800 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-moss/20 to-emerald-100 dark:from-emerald-950 dark:to-stone-800 flex items-center justify-center font-bold text-xs text-moss dark:text-emerald-300 border border-moss/20 overflow-hidden shrink-0">
-                          {user.avatar_url ? (
-                            <img src={resolveImageUrl(user.avatar_url)} alt="Avatar" className="w-full h-full object-cover" />
-                          ) : (
-                            user.full_name?.charAt(0) || user.email.charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-ink dark:text-white truncate">{user.full_name || user.email.split("@")[0]}</p>
-                          <p className="text-[11px] text-ink/50 dark:text-stone-400 truncate">{user.email}</p>
-                        </div>
-                      </div>
-                      <span className="text-xs text-moss dark:text-emerald-400 font-semibold shrink-0">Profile →</span>
-                    </Link>
-
-                    {user.is_admin && (
-                      <Link
-                        href="/admin"
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-ink/80 dark:text-stone-300 hover:text-moss dark:hover:text-emerald-400 hover:bg-sand/60 dark:hover:bg-stone-800 transition-colors"
-                      >
-                        <span>🛡️</span> Admin Dashboard
-                      </Link>
-                    )}
-
-                    <button
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors text-left font-medium"
-                    >
-                      <span>🚪</span> Log out
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2 pt-1">
-                    <Link
-                      href="/login"
-                      className="flex-1 text-center text-sm font-semibold text-ink dark:text-white border border-ink/20 dark:border-stone-700 py-2.5 rounded-xl hover:border-moss hover:text-moss dark:hover:border-emerald-400 dark:hover:text-emerald-400 transition-colors"
-                    >
-                      Log in
-                    </Link>
-                    <Link
-                      href="/register"
-                      className="flex-1 text-center text-sm font-semibold text-white bg-moss py-2.5 rounded-xl hover:bg-moss/90 transition-colors shadow-sm"
-                    >
-                      Sign up
-                    </Link>
-                  </div>
-                )}
+        <div className="md:hidden bg-surface border-b border-border px-4 py-3 space-y-2">
+          {user ? (
+            <>
+              <div className="pb-2 border-b border-border flex items-center justify-between">
+                <span className="text-xs text-text-secondary">Signed in as</span>
+                <span className="text-xs font-semibold text-text">
+                  {user.full_name || user.email}
+                </span>
               </div>
+              <div className="space-y-1">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-3 py-2 text-sm text-text hover:bg-surface-muted rounded-sm"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+                {user.is_admin && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-3 py-2 text-sm text-text hover:bg-surface-muted rounded-sm"
+                  >
+                    Admin dashboard
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-surface-muted rounded-sm"
+                >
+                  Log out
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2 pt-1">
+              <Link
+                href="/login"
+                onClick={() => setMenuOpen(false)}
+                className="block text-center py-2 text-sm font-medium border border-border rounded-sm"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/register"
+                onClick={() => setMenuOpen(false)}
+                className="block text-center py-2 text-sm font-medium bg-primary text-primary-fg rounded-sm"
+              >
+                Sign up
+              </Link>
             </div>
-          </div>
-        </>
+          )}
+        </div>
       )}
     </header>
   );

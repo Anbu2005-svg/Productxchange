@@ -7,46 +7,54 @@ import dynamic from "next/dynamic";
 import { api, Product, getToken } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import { ProductCardSkeleton } from "@/components/Skeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
+import {
+  Search,
+  X,
+  SlidersHorizontal,
+  MapPin,
+  Globe,
+  Grid,
+  Map as MapIcon,
+  BookOpen,
+  Laptop,
+  Microscope,
+  Bike,
+  Armchair,
+  Dumbbell,
+  Package,
+  LayoutGrid,
+  Loader2,
+  Plus,
+} from "lucide-react";
 
 const CampusMap = dynamic(() => import("@/components/CampusMap"), {
   ssr: false,
   loading: () => (
-    <div className="h-[520px] rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-sm text-ink/50 dark:text-stone-400 animate-pulse">
-      Loading interactive campus map…
+    <div className="h-[480px] rounded-md bg-surface-muted flex items-center justify-center text-xs text-text-tertiary">
+      Loading campus map…
     </div>
   ),
 });
 
-const TRANSACTION_TYPES = ["ALL", "BUY", "RENT", "EXCHANGE", "DONATE"];
-
 const TYPE_CHIPS = [
-  { key: "ALL", label: "All Items", icon: "✨" },
-  { key: "BUY", label: "Buy", icon: "🛒" },
-  { key: "EXCHANGE", label: "Swap", icon: "🔄" },
-  { key: "RENT", label: "Rent", icon: "⏱️" },
-  { key: "DONATE", label: "Free Gifts", icon: "🎁" },
-];
-
-const CATEGORIES = [
-  "ALL",
-  "Textbooks & Study Material",
-  "Electronics & Gadgets",
-  "Lab Equipment & Calculators",
-  "Cycles & Mobility",
-  "Hostel & Room Essentials",
-  "Sports & Fitness",
-  "Other",
+  { key: "ALL", label: "All items" },
+  { key: "BUY", label: "Buy" },
+  { key: "RENT", label: "Rent" },
+  { key: "EXCHANGE", label: "Exchange" },
+  { key: "DONATE", label: "Donate" },
 ];
 
 const CATEGORY_CHIPS = [
-  { key: "ALL", name: "All", icon: "✨" },
-  { key: "Textbooks & Study Material", name: "Textbooks & Notes", icon: "📚" },
-  { key: "Electronics & Gadgets", name: "Tech & Gadgets", icon: "💻" },
-  { key: "Lab Equipment & Calculators", name: "Lab Gear", icon: "🔬" },
-  { key: "Cycles & Mobility", name: "Cycles", icon: "🚲" },
-  { key: "Hostel & Room Essentials", name: "Hostel & Dorm", icon: "🛋️" },
-  { key: "Sports & Fitness", name: "Sports", icon: "🏸" },
-  { key: "Other", name: "Other", icon: "🎒" },
+  { key: "ALL", name: "All", icon: LayoutGrid },
+  { key: "Textbooks & Study Material", name: "Textbooks", icon: BookOpen },
+  { key: "Electronics & Gadgets", name: "Electronics", icon: Laptop },
+  { key: "Lab Equipment & Calculators", name: "Lab kits", icon: Microscope },
+  { key: "Cycles & Mobility", name: "Bicycles", icon: Bike },
+  { key: "Hostel & Room Essentials", name: "Hostel gear", icon: Armchair },
+  { key: "Sports & Fitness", name: "Sports", icon: Dumbbell },
+  { key: "Other", name: "Other", icon: Package },
 ];
 
 const CONDITIONS = ["ALL", "Brand New", "Like New", "Good", "Fair"];
@@ -79,7 +87,6 @@ export default function HomePage() {
 
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Request browser geolocation on mount and listen to campus preference
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -88,11 +95,17 @@ export default function HomePage() {
     }
     setIsLoggedIn(true);
 
-    const savedCampus = typeof window !== "undefined" ? localStorage.getItem("px_campus") || localStorage.getItem("preferred_campus") || "" : "";
+    const savedCampus =
+      typeof window !== "undefined"
+        ? localStorage.getItem("px_campus") || localStorage.getItem("preferred_campus") || ""
+        : "";
     setSelectedCampus(savedCampus);
 
     const handleCampusChange = (e: any) => {
-      const newCampus = e?.detail !== undefined ? e.detail : (localStorage.getItem("px_campus") || localStorage.getItem("preferred_campus") || "");
+      const newCampus =
+        e?.detail !== undefined
+          ? e.detail
+          : localStorage.getItem("px_campus") || localStorage.getItem("preferred_campus") || "";
       setSelectedCampus(newCampus);
     };
     window.addEventListener("campusChanged", handleCampusChange);
@@ -112,7 +125,6 @@ export default function HomePage() {
     return () => window.removeEventListener("campusChanged", handleCampusChange);
   }, [router]);
 
-  // Fetch recommendations if logged in
   useEffect(() => {
     if (isLoggedIn) {
       api("/products/recommended")
@@ -121,105 +133,131 @@ export default function HomePage() {
     }
   }, [isLoggedIn]);
 
-  const fetchListings = useCallback((append = false) => {
-    if (!append) {
-      setLoading(true);
-      setPage(0);
-    } else {
-      setLoadingMore(true);
-    }
-    setError(null);
+  const fetchListings = useCallback(
+    (append = false) => {
+      if (!append) {
+        setLoading(true);
+        setPage(0);
+      } else {
+        setLoadingMore(true);
+      }
+      setError(null);
 
-    const skip = append ? (page + 1) * PAGE_SIZE : 0;
-    let url: string;
-    const params = new URLSearchParams();
+      const skip = append ? (page + 1) * PAGE_SIZE : 0;
+      let url: string;
+      const params = new URLSearchParams();
 
-    if (query.trim()) params.append("q", query.trim());
-    if (selectedType !== "ALL") params.append("transaction_type", selectedType);
-    if (selectedCategory !== "ALL") params.append("category", selectedCategory);
-    if (selectedCondition !== "ALL") params.append("condition", selectedCondition);
-    if (selectedCampus.trim()) params.append("college", selectedCampus.trim());
-    if (has3DOnly) params.append("has_3d", "true");
-    if (minPrice.trim()) params.append("min_price", minPrice.trim());
-    if (maxPrice.trim()) params.append("max_price", maxPrice.trim());
+      if (query.trim()) params.append("q", query.trim());
+      if (selectedType !== "ALL") params.append("transaction_type", selectedType);
+      if (selectedCategory !== "ALL") params.append("category", selectedCategory);
+      if (selectedCondition !== "ALL") params.append("condition", selectedCondition);
+      if (selectedCampus.trim() && selectedCampus !== "ALL") params.append("college", selectedCampus.trim());
+      if (has3DOnly) params.append("has_3d", "true");
+      if (minPrice.trim()) params.append("min_price", minPrice.trim());
+      if (maxPrice.trim()) params.append("max_price", maxPrice.trim());
 
-    if (useDistanceFilter && coords) {
-      params.append("lat", String(coords.lat));
-      params.append("lng", String(coords.lng));
-      params.append("radius_km", String(radiusKm));
-      params.append("sort", "distance");
-      params.append("offset", String(skip));
-      params.append("limit", String(PAGE_SIZE));
-      url = `/products/nearby/search?${params.toString()}`;
-    } else {
-      params.append("skip", String(skip));
-      params.append("limit", String(PAGE_SIZE));
-      url = `/products?${params.toString()}`;
-    }
+      if (useDistanceFilter && coords) {
+        params.append("lat", String(coords.lat));
+        params.append("lng", String(coords.lng));
+        params.append("radius_km", String(radiusKm));
+        params.append("sort", "distance");
+        params.append("offset", String(skip));
+        params.append("limit", String(PAGE_SIZE));
+        url = `/products/nearby/search?${params.toString()}`;
+      } else {
+        params.append("skip", String(skip));
+        params.append("limit", String(PAGE_SIZE));
+        url = `/products?${params.toString()}`;
+      }
 
-    api(url)
-      .then((res) => {
-        const rawItems = Array.isArray(res) ? res : (res.items || res);
-        const hasItems = Array.isArray(rawItems) && rawItems.length > 0;
+      api(url)
+        .then((res) => {
+          const rawItems = Array.isArray(res) ? res : res.items || res;
+          const hasItems = Array.isArray(rawItems) && rawItems.length > 0;
 
-        // If distance search yielded 0 items, fallback to all campus items automatically
-        if (!hasItems && !append && useDistanceFilter) {
-          const fallbackParams = new URLSearchParams();
-          if (query.trim()) fallbackParams.append("q", query.trim());
-          if (selectedType !== "ALL") fallbackParams.append("transaction_type", selectedType);
-          if (selectedCategory !== "ALL") fallbackParams.append("category", selectedCategory);
-          if (selectedCondition !== "ALL") fallbackParams.append("condition", selectedCondition);
-          if (selectedCampus.trim()) fallbackParams.append("college", selectedCampus.trim());
-          if (has3DOnly) fallbackParams.append("has_3d", "true");
-          if (minPrice.trim()) fallbackParams.append("min_price", minPrice.trim());
-          if (maxPrice.trim()) fallbackParams.append("max_price", maxPrice.trim());
-          fallbackParams.append("skip", "0");
-          fallbackParams.append("limit", String(PAGE_SIZE));
+          if (!hasItems && !append && useDistanceFilter) {
+            const fallbackParams = new URLSearchParams();
+            if (query.trim()) fallbackParams.append("q", query.trim());
+            if (selectedType !== "ALL") fallbackParams.append("transaction_type", selectedType);
+            if (selectedCategory !== "ALL") fallbackParams.append("category", selectedCategory);
+            if (selectedCondition !== "ALL") fallbackParams.append("condition", selectedCondition);
+            if (selectedCampus.trim() && selectedCampus !== "ALL") fallbackParams.append("college", selectedCampus.trim());
+            if (has3DOnly) fallbackParams.append("has_3d", "true");
+            if (minPrice.trim()) fallbackParams.append("min_price", minPrice.trim());
+            if (maxPrice.trim()) fallbackParams.append("max_price", maxPrice.trim());
+            fallbackParams.append("skip", "0");
+            fallbackParams.append("limit", String(PAGE_SIZE));
 
-          return api(`/products?${fallbackParams.toString()}`).then((fbRes) => {
-            const fbItems = Array.isArray(fbRes) ? fbRes : (fbRes.items || []);
-            setProducts(fbItems);
-            setIsLocationFallback(fbItems.length > 0);
-            setHasMore(fbItems.length >= PAGE_SIZE);
-          });
-        }
-
-        setIsLocationFallback(false);
-        if (Array.isArray(res)) {
-          if (append) {
-            setProducts((prev) => [...prev, ...res]);
-          } else {
-            setProducts(res);
+            return api(`/products?${fallbackParams.toString()}`).then((fbRes) => {
+              const fbItems = Array.isArray(fbRes) ? fbRes : fbRes.items || [];
+              setProducts(fbItems);
+              setIsLocationFallback(fbItems.length > 0);
+              setHasMore(fbItems.length >= PAGE_SIZE);
+            });
           }
-          setHasMore(res.length >= PAGE_SIZE);
-        } else {
-          const items = res.items || res;
-          if (append) {
-            setProducts((prev) => [...prev, ...items]);
-          } else {
-            setProducts(items);
-          }
-          setHasMore(res.has_more ?? items.length >= PAGE_SIZE);
-        }
-        if (append) setPage((p) => p + 1);
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => {
-        setLoading(false);
-        setLoadingMore(false);
-      });
-  }, [useDistanceFilter, coords, radiusKm, query, selectedType, selectedCategory, selectedCondition, selectedCampus, has3DOnly, minPrice, maxPrice, page]);
 
-  // Refetch when filters change
+          setIsLocationFallback(false);
+          if (Array.isArray(res)) {
+            if (append) {
+              setProducts((prev) => [...prev, ...res]);
+            } else {
+              setProducts(res);
+            }
+            setHasMore(res.length >= PAGE_SIZE);
+          } else {
+            const items = res.items || res;
+            if (append) {
+              setProducts((prev) => [...prev, ...items]);
+            } else {
+              setProducts(items);
+            }
+            setHasMore(res.has_more ?? items.length >= PAGE_SIZE);
+          }
+          if (append) setPage((p) => p + 1);
+        })
+        .catch((e) => setError(e.message))
+        .finally(() => {
+          setLoading(false);
+          setLoadingMore(false);
+        });
+    },
+    [
+      useDistanceFilter,
+      coords,
+      radiusKm,
+      query,
+      selectedType,
+      selectedCategory,
+      selectedCondition,
+      selectedCampus,
+      has3DOnly,
+      minPrice,
+      maxPrice,
+      page,
+    ]
+  );
+
   useEffect(() => {
     if (!isLoggedIn) return;
     const timer = setTimeout(() => {
       fetchListings(false);
     }, 250);
     return () => clearTimeout(timer);
-  }, [isLoggedIn, useDistanceFilter, coords, radiusKm, query, selectedType, selectedCategory, selectedCondition, selectedCampus, has3DOnly, minPrice, maxPrice]);
+  }, [
+    isLoggedIn,
+    useDistanceFilter,
+    coords,
+    radiusKm,
+    query,
+    selectedType,
+    selectedCategory,
+    selectedCondition,
+    selectedCampus,
+    has3DOnly,
+    minPrice,
+    maxPrice,
+  ]);
 
-  // Infinite Scroll IntersectionObserver (Feature #9)
   useEffect(() => {
     if (!hasMore || loading || loadingMore) return;
     const observer = new IntersectionObserver(
@@ -248,456 +286,396 @@ export default function HomePage() {
     setIsLocationFallback(false);
     if (typeof window !== "undefined") {
       localStorage.removeItem("preferred_campus");
-      setSelectedCampus("");
-      window.dispatchEvent(new Event("campusChanged"));
+      localStorage.removeItem("px_campus");
     }
+    setSelectedCampus("");
   }
 
   const hasActiveFilters =
+    query.trim() !== "" ||
     selectedCategory !== "ALL" ||
     selectedCondition !== "ALL" ||
     minPrice !== "" ||
     maxPrice !== "" ||
     selectedType !== "ALL" ||
     has3DOnly ||
-    selectedCampus !== "";
+    (selectedCampus !== "" && selectedCampus !== "ALL");
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-4 text-center px-4 animate-fade-in">
-        <div className="w-10 h-10 rounded-full border-3 border-moss border-t-transparent animate-spin" />
-        <div className="space-y-1">
-          <h3 className="font-bold text-base text-ink dark:text-white">ProductXchange Campus Portal</h3>
-          <p className="text-xs text-ink/60 dark:text-stone-400">
-            Authentication required. Redirecting to login…
-          </p>
-        </div>
+      <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3 text-center px-4">
+        <Loader2 className="w-5 h-5 text-primary animate-spin" />
+        <p className="text-xs text-text-secondary">Authenticating session…</p>
       </div>
     );
   }
 
   return (
-    <div className="py-2">
-      {/* Campus Filter Indicator Banner */}
-      {selectedCampus && (
-        <div className="mb-4 flex items-center justify-between px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs animate-fade-in">
-          <div className="flex items-center gap-2">
-            <span className="text-base">🏫</span>
-            <span>
-              Showing listings exclusively for <strong>{selectedCampus}</strong>
-            </span>
-          </div>
+    <div className="space-y-4">
+      {/* Campus Scope Notice */}
+      {selectedCampus && selectedCampus !== "ALL" && (
+        <div className="flex items-center justify-between px-3.5 py-2 rounded-sm bg-surface-muted border border-border text-xs text-text-secondary">
+          <span>
+            Showing listings for <strong className="text-text">{selectedCampus}</strong>
+          </span>
           <button
             type="button"
             onClick={() => {
+              localStorage.removeItem("px_campus");
               localStorage.removeItem("preferred_campus");
-              setSelectedCampus("");
-              window.dispatchEvent(new Event("campusChanged"));
+              setSelectedCampus("ALL");
+              window.dispatchEvent(new CustomEvent("campusChanged", { detail: "ALL" }));
             }}
-            className="text-xs font-semibold underline hover:text-emerald-700 dark:hover:text-emerald-300"
+            className="text-xs text-primary font-medium hover:underline"
           >
-            Switch to All Campuses
+            Show all campuses
           </button>
         </div>
       )}
 
-      {/* Fallback Location Notice if Near Me found 0 products */}
+      {/* Proximity Fallback Notice */}
       {isLocationFallback && (
-        <div className="mb-4 flex items-center justify-between px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs animate-fade-in">
-          <div className="flex items-center gap-2">
-            <span className="text-base">📍</span>
-            <span>
-              No listings found within <strong>{radiusKm} km</strong> of your current location. Displaying all available <strong>campus listings across colleges</strong>:
-            </span>
-          </div>
+        <div className="flex items-center justify-between px-3.5 py-2 rounded-sm bg-warning-subtle border border-warning/20 text-xs text-warning">
+          <span>
+            No listings within {radiusKm} km. Showing campus listings from all colleges.
+          </span>
           <button
             type="button"
             onClick={() => {
               setUseDistanceFilter(false);
               setIsLocationFallback(false);
             }}
-            className="text-xs font-semibold underline hover:text-amber-700 dark:hover:text-amber-300"
+            className="text-xs font-medium underline"
           >
-            Stay on All Campuses
+            Keep all campuses
           </button>
         </div>
       )}
 
-      {/* Campus Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-900/90 via-[#1c2b24] to-[#122019] text-white p-6 sm:p-8 mb-5 shadow-lg border border-emerald-500/20">
-        <div className="absolute -top-24 -right-24 w-72 h-72 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-teal-500/15 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold uppercase tracking-wider mb-3">
-            <span>🌱</span> Campus Peer-to-Peer Economy
-          </div>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight leading-tight">
-            Exchange & Discover Essentials Right On <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Your Campus</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-sand/80 mt-2 leading-relaxed max-w-xl">
-            Save money and reduce campus waste. Swap textbooks, lab drafters, electronics, cycles, and hostel gear with verified peers at your college.
-          </p>
-
-          <div className="flex flex-wrap items-center gap-3 sm:gap-6 mt-4 pt-4 border-t border-white/10 text-[11px] sm:text-xs text-sand/80 font-medium">
-            <div className="flex items-center gap-1.5">
-              <span className="text-emerald-400">✓</span> In-Person Campus Handshakes
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-emerald-400">✓</span> Zero Platform Fees
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-emerald-400">✓</span> 360° Interactive 3D Previews
-            </div>
-          </div>
+      {/* Sticky Search & Filter Control Bar */}
+      <div className="sticky top-14 z-30 bg-bg py-2 space-y-2.5">
+        {/* Search Field */}
+        <div className="relative">
+          <Search className="absolute left-3.5 top-3 w-4 h-4 text-text-tertiary" />
+          <input
+            type="text"
+            placeholder="Search textbooks, calculators, bicycles, lab kits…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full h-11 pl-10 pr-9 text-sm bg-surface text-text rounded-sm border border-border focus:border-primary focus:outline-none transition-colors placeholder:text-text-tertiary"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="absolute right-3 top-3 text-text-tertiary hover:text-text p-0.5"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
-      </div>
 
-      {/* Category Quick-Select Carousel Ribbon */}
-      <div className="mb-4 flex items-center gap-2 overflow-x-auto scrollbar-none touch-pan-x pb-1 -mx-1 px-1">
-        {CATEGORY_CHIPS.map((cat) => (
-          <button
-            key={cat.key}
-            type="button"
-            onClick={() => setSelectedCategory(cat.key)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 border ${
-              selectedCategory === cat.key
-                ? "bg-moss text-white border-moss shadow-sm scale-102"
-                : "bg-white/80 dark:bg-stone-900/80 text-ink/70 dark:text-stone-300 border-ink/10 dark:border-white/10 hover:border-moss/40 hover:bg-white dark:hover:bg-stone-800"
-            }`}
-          >
-            <span>{cat.icon}</span>
-            <span>{cat.name}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Hero Search & Filter Bar */}
-      <div className="bg-white/95 dark:bg-[#1a211d]/95 backdrop-blur-xl border border-ink/8 dark:border-white/10 rounded-2xl p-4 sm:p-5 mb-5 sm:mb-6 shadow-sm transition-colors">
-        <div className="flex flex-col md:flex-row gap-3 items-stretch">
-          <div className="relative flex-1">
-            <span className="absolute left-3.5 top-3 text-ink/40 dark:text-stone-400 text-sm">🔍</span>
-            <input
-              type="text"
-              placeholder="Search books, lab coats, calculators, cycles, hostel items..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full border border-ink/15 dark:border-stone-700 rounded-xl pl-9 pr-8 py-2.5 text-sm text-ink dark:text-white dark:bg-stone-800/80 focus:outline-none focus:border-moss transition-colors"
-            />
-            {query && (
+        {/* Horizontally Scrollable Category Chips */}
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+          {CATEGORY_CHIPS.map((cat) => {
+            const Icon = cat.icon;
+            const isSelected = selectedCategory === cat.key;
+            return (
               <button
+                key={cat.key}
                 type="button"
-                onClick={() => setQuery("")}
-                className="absolute right-3 top-2.5 text-xs text-ink/40 dark:text-stone-400 hover:text-ink dark:hover:text-white p-1"
-                title="Clear search"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* Transaction Type Filter Pills & 3D Toggle */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none touch-pan-x pb-1 md:pb-0 -mx-1 px-1">
-            {TYPE_CHIPS.map((type) => (
-              <button
-                key={type.key}
-                onClick={() => setSelectedType(type.key)}
-                className={`text-xs font-semibold px-3 py-2 rounded-xl transition-all shrink-0 flex items-center gap-1.5 ${
-                  selectedType === type.key
-                    ? "bg-moss text-white shadow-sm"
-                    : "bg-sand/60 dark:bg-stone-800 text-ink/70 dark:text-stone-300 hover:bg-sand dark:hover:bg-stone-700"
+                onClick={() => setSelectedCategory(cat.key)}
+                className={`flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium shrink-0 border transition-colors ${
+                  isSelected
+                    ? "bg-primary text-primary-fg border-primary font-semibold"
+                    : "bg-surface text-text-secondary border-border hover:border-border-strong hover:text-text"
                 }`}
               >
-                {type.icon && <span>{type.icon}</span>}
-                <span>{type.label}</span>
+                <Icon className="w-3.5 h-3.5" strokeWidth={1.75} />
+                <span>{cat.name}</span>
               </button>
-            ))}
+            );
+          })}
+        </div>
 
-            {/* 3D View Only Pill */}
-            <button
-              onClick={() => setHas3DOnly(!has3DOnly)}
-              className={`text-xs font-semibold px-3 py-2 rounded-xl transition-all shrink-0 flex items-center gap-1.5 ${
-                has3DOnly
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm ring-1 ring-blue-400"
-                  : "bg-sand/60 dark:bg-stone-800 text-ink/70 dark:text-stone-300 hover:bg-sand dark:hover:bg-stone-700"
-              }`}
-            >
-              <span>🧊</span> 3D Only
-            </button>
+        {/* Secondary Filter Controls Bar */}
+        <div className="flex items-center justify-between gap-2 text-xs pt-1">
+          {/* Type Filter Chips */}
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+            {TYPE_CHIPS.map((type) => {
+              const isSelected = selectedType === type.key;
+              return (
+                <button
+                  key={type.key}
+                  type="button"
+                  onClick={() => setSelectedType(type.key)}
+                  className={`h-7 px-2.5 rounded-sm text-xs font-medium shrink-0 transition-colors ${
+                    isSelected
+                      ? "bg-surface-muted text-text font-semibold border border-border-strong"
+                      : "text-text-secondary hover:text-text hover:bg-surface-muted"
+                  }`}
+                >
+                  {type.label}
+                </button>
+              );
+            })}
+          </div>
 
-            {/* Filter Toggle Button */}
+          {/* Filter Drawer Toggle & View Mode Toggle */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
+              type="button"
               onClick={() => setShowFilters(!showFilters)}
-              className={`text-xs font-semibold px-3 py-2 rounded-xl border transition-all shrink-0 flex items-center gap-1.5 ${
+              className={`flex items-center gap-1.5 h-7 px-2.5 rounded-sm border text-xs font-medium transition-colors ${
                 showFilters || hasActiveFilters
-                  ? "bg-moss/10 dark:bg-moss/20 border-moss text-moss dark:text-emerald-300"
-                  : "border-ink/15 dark:border-stone-700 text-ink/70 dark:text-stone-300 hover:border-moss"
+                  ? "bg-surface-muted border-primary text-primary"
+                  : "bg-surface border-border text-text-secondary hover:text-text hover:border-border-strong"
               }`}
             >
-              <span>⚙️</span> Filters {hasActiveFilters && "•"}
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Filters</span>
+              {hasActiveFilters && (
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              )}
             </button>
+
+            {/* Grid / Map toggle */}
+            <div className="flex items-center border border-border rounded-sm bg-surface p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                aria-label="Grid view"
+                className={`p-1 rounded-xs transition-colors ${
+                  viewMode === "grid"
+                    ? "bg-surface-muted text-text font-semibold"
+                    : "text-text-tertiary hover:text-text"
+                }`}
+              >
+                <Grid className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("map")}
+                aria-label="Map view"
+                className={`p-1 rounded-xs transition-colors ${
+                  viewMode === "map"
+                    ? "bg-surface-muted text-text font-semibold"
+                    : "text-text-tertiary hover:text-text"
+                }`}
+              >
+                <MapIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Collapsible Advanced Filters (Feature #3) */}
+        {/* Expandable Filter Details */}
         {showFilters && (
-          <div className="mt-4 pt-4 border-t border-ink/10 dark:border-stone-800 space-y-3 animate-fade-in text-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-              {/* Category */}
-              <div>
-                <label className="block font-semibold text-ink/70 dark:text-stone-300 mb-1">Category</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full border border-ink/20 dark:border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+          <div className="p-3.5 bg-surface border border-border rounded-md space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Location Scope */}
+              <div className="space-y-1">
+                <span className="text-text-secondary font-medium block">Location scope</span>
+                <div className="flex items-center gap-1 border border-border rounded-sm p-0.5 bg-surface-muted">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseDistanceFilter(false);
+                      setIsLocationFallback(false);
+                    }}
+                    className={`flex-1 py-1 text-center rounded-xs font-medium transition-colors ${
+                      !useDistanceFilter
+                        ? "bg-surface text-text font-semibold shadow-xs"
+                        : "text-text-secondary hover:text-text"
+                    }`}
+                  >
+                    All campuses
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUseDistanceFilter(true)}
+                    className={`flex-1 py-1 text-center rounded-xs font-medium transition-colors ${
+                      useDistanceFilter
+                        ? "bg-surface text-text font-semibold shadow-xs"
+                        : "text-text-secondary hover:text-text"
+                    }`}
+                  >
+                    Near me
+                  </button>
+                </div>
+                {useDistanceFilter && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="range"
+                      min={1}
+                      max={50}
+                      value={radiusKm}
+                      onChange={(e) => setRadiusKm(Number(e.target.value))}
+                      className="w-full"
+                    />
+                    <span className="text-text font-semibold tabular-nums min-w-[40px]">
+                      {radiusKm} km
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Condition */}
-              <div>
-                <label className="block font-semibold text-ink/70 dark:text-stone-300 mb-1">Condition</label>
+              <div className="space-y-1">
+                <label className="text-text-secondary font-medium block">Condition</label>
                 <select
                   value={selectedCondition}
                   onChange={(e) => setSelectedCondition(e.target.value)}
-                  className="w-full border border-ink/20 dark:border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
+                  className="w-full h-8 px-2 text-xs bg-surface border border-border rounded-sm focus:border-primary focus:outline-none"
                 >
                   {CONDITIONS.map((c) => (
                     <option key={c} value={c}>
-                      {c === "ALL" ? "All Conditions" : c}
+                      {c === "ALL" ? "All conditions" : c}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Price Range */}
-              <div className="sm:col-span-2">
-                <label className="block font-semibold text-ink/70 dark:text-stone-300 mb-1">Price Range (₹)</label>
-                <div className="flex items-center gap-2">
+              {/* Price range */}
+              <div className="space-y-1">
+                <label className="text-text-secondary font-medium block">Price range (₹)</label>
+                <div className="flex items-center gap-1.5">
                   <input
                     type="number"
-                    placeholder="Min ₹"
+                    placeholder="Min"
                     value={minPrice}
                     onChange={(e) => setMinPrice(e.target.value)}
-                    className="w-full border border-ink/20 dark:border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
+                    className="w-full h-8 px-2 text-xs bg-surface border border-border rounded-sm focus:border-primary focus:outline-none tabular-nums"
                   />
-                  <span className="text-ink/40 dark:text-stone-500">—</span>
+                  <span className="text-text-tertiary">—</span>
                   <input
                     type="number"
-                    placeholder="Max ₹"
+                    placeholder="Max"
                     value={maxPrice}
                     onChange={(e) => setMaxPrice(e.target.value)}
-                    className="w-full border border-ink/20 dark:border-stone-700 rounded-lg px-2.5 py-1.5 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
+                    className="w-full h-8 px-2 text-xs bg-surface border border-border rounded-sm focus:border-primary focus:outline-none tabular-nums"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedType("DONATE");
-                  setMinPrice("0");
-                  setMaxPrice("0");
-                }}
-                className="text-xs text-purple-700 dark:text-purple-300 hover:underline font-semibold"
-              >
-                🎁 Show Free Donations Only
-              </button>
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <label className="flex items-center gap-2 cursor-pointer text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={has3DOnly}
+                  onChange={(e) => setHas3DOnly(e.target.checked)}
+                  className="rounded-xs border-border text-primary focus:ring-primary"
+                />
+                <span>3D preview only</span>
+              </label>
+
               {hasActiveFilters && (
                 <button
                   type="button"
                   onClick={resetFilters}
-                  className="text-xs text-clay hover:underline font-semibold"
+                  className="text-xs text-primary font-medium hover:underline"
                 >
-                  Clear all filters
+                  Clear filters
                 </button>
               )}
             </div>
           </div>
         )}
-
-        {/* Location Scope & Proximity Controls */}
-        <div className="mt-4 pt-3 border-t border-ink/5 dark:border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-ink/70 dark:text-stone-300 gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-ink/80 dark:text-stone-200">Location:</span>
-            <div className="inline-flex rounded-xl p-0.5 bg-sand/80 dark:bg-stone-800 border border-ink/10 dark:border-stone-700">
-              <button
-                type="button"
-                onClick={() => {
-                  setUseDistanceFilter(false);
-                  setIsLocationFallback(false);
-                }}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  !useDistanceFilter
-                    ? "bg-white dark:bg-stone-900 text-moss dark:text-emerald-400 shadow-sm"
-                    : "text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
-                }`}
-              >
-                🌐 All Campuses
-              </button>
-              <button
-                type="button"
-                onClick={() => setUseDistanceFilter(true)}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  useDistanceFilter
-                    ? "bg-white dark:bg-stone-900 text-moss dark:text-emerald-400 shadow-sm"
-                    : "text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
-                }`}
-              >
-                📍 Near Me
-              </button>
-            </div>
-
-            {useDistanceFilter && (
-              <div className="flex items-center gap-2 ml-1">
-                <input
-                  type="range"
-                  min={1}
-                  max={50}
-                  value={radiusKm}
-                  onChange={(e) => setRadiusKm(Number(e.target.value))}
-                  className="cursor-pointer w-24 accent-moss"
-                />
-                <strong className="text-moss dark:text-emerald-400 font-semibold">{radiusKm} km</strong>
-              </div>
-            )}
-          </div>
-
-          <span className="text-[11px] text-ink/50 dark:text-stone-400">
-            {useDistanceFilter
-              ? "Filtering within radius using PostGIS spatial queries"
-              : "Showing all items across participating campus colleges"}
-          </span>
-        </div>
       </div>
 
-      {/* Recommendations Section (Logged-in users only) */}
-      {isLoggedIn && recommended.length > 0 && (
-        <div className="mb-8 animate-fade-in delay-200">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-bold text-ink dark:text-white flex items-center gap-2">
-              <span>✨</span> Recommended for You
+      {/* Recommended Section (Logged in students) */}
+      {isLoggedIn && recommended.length > 0 && !hasActiveFilters && (
+        <section aria-label="Recommended items" className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-text uppercase tracking-wider">
+              Recommended for you
             </h2>
           </div>
-          <div className="flex gap-3 sm:gap-4 overflow-x-auto scrollbar-none touch-pan-x pb-2 -mx-2 px-2 sm:-mx-1 sm:px-1">
+          <div className="flex gap-3 overflow-x-auto scrollbar-none pb-2 -mx-1 px-1">
             {recommended.map((p) => (
-              <div key={p.id} className="w-56 sm:w-64 shrink-0">
+              <div key={p.id} className="w-48 sm:w-56 shrink-0">
                 <ProductCard product={p} />
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Listing Feed Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h2 className="text-lg font-bold text-ink dark:text-white flex items-center gap-2">
-          <span>Campus Listings</span>
+      {/* Feed Section Header */}
+      <div className="flex items-center justify-between pt-1">
+        <h2 className="text-sm font-semibold text-text">
+          Campus listings
           {!loading && (
-            <span className="text-xs font-normal text-ink/50 dark:text-stone-400">({products.length} loaded)</span>
+            <span className="text-xs font-normal text-text-secondary ml-1.5 tabular-nums">
+              ({products.length})
+            </span>
           )}
         </h2>
-
-        <div className="flex items-center gap-3">
-          {/* View Mode Toggle */}
-          <div className="bg-sand/70 dark:bg-stone-800 p-1 rounded-xl flex items-center gap-1 border border-ink/10 dark:border-stone-700">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
-                viewMode === "grid"
-                  ? "bg-white dark:bg-stone-900 text-moss dark:text-emerald-400 shadow-sm"
-                  : "text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
-              }`}
-            >
-              <span>▦</span> Grid
-            </button>
-            <button
-              onClick={() => setViewMode("map")}
-              className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
-                viewMode === "map"
-                  ? "bg-white dark:bg-stone-900 text-moss dark:text-emerald-400 shadow-sm"
-                  : "text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
-              }`}
-            >
-              <span>🗺️</span> Campus Map
-            </button>
-          </div>
-
-          <Link
-            href="/listings/new"
-            className="text-xs font-semibold text-moss dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
-          >
-            <span>+</span> Post an item
-          </Link>
-        </div>
       </div>
 
+      {/* Error State */}
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-sm rounded-xl mb-4">
-          {error}
-        </div>
+        <ErrorState
+          title="Couldn't load listings"
+          message={error}
+          onRetry={() => fetchListings(false)}
+        />
       )}
 
-      {/* Shimmer Skeleton Loading State (Feature #7) */}
+      {/* Loading Skeletons */}
       {loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <ProductCardSkeleton key={i} />
           ))}
         </div>
       )}
 
+      {/* Empty State */}
       {!loading && products.length === 0 && (
-        <div className="text-center py-16 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-8 transition-colors">
-          <span className="text-4xl">🎒</span>
-          <h3 className="font-bold text-base text-ink dark:text-white mt-2">No listings found nearby</h3>
-          <p className="text-xs text-ink/60 dark:text-stone-400 mt-1 max-w-sm mx-auto">
-            Try expanding your distance radius slider or clearing search filters.
-          </p>
-          <Link
-            href="/listings/new"
-            className="mt-4 inline-flex items-center gap-1 bg-moss text-white font-semibold text-xs px-4 py-2 rounded-lg hover:bg-moss/90 transition-colors shadow-sm"
-          >
-            Be the first to list an item
-          </Link>
-        </div>
+        <EmptyState
+          icon={Package}
+          title="No listings found"
+          description={
+            hasActiveFilters
+              ? "No items match your filter criteria. Try clearing filters or widening your distance."
+              : "No campus listings available at this time."
+          }
+          actionLabel={hasActiveFilters ? "Clear filters" : "Create first listing"}
+          onAction={hasActiveFilters ? resetFilters : () => router.push("/listings/new")}
+        />
       )}
 
-      {/* Products Content: Grid or Campus Map */}
-      {!loading && viewMode === "map" ? (
-        <div className="mb-6 animate-fade-in overflow-hidden rounded-2xl border border-ink/10 dark:border-stone-800">
+      {/* Main Grid or Map Display */}
+      {!loading && products.length > 0 && viewMode === "map" ? (
+        <div className="rounded-md border border-border overflow-hidden">
           <CampusMap
             products={products}
             userCoords={coords}
             radiusKm={radiusKm}
-            height="480px"
+            height="500px"
           />
         </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+      ) : !loading && products.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
           {products.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
         </div>
-      )}
+      ) : null}
 
-      {/* Infinite Scroll Sentinel (Feature #9) */}
-      <div ref={sentinelRef} className="h-10 flex items-center justify-center mt-6">
+      {/* Infinite Scroll Sentinel */}
+      <div ref={sentinelRef} className="h-12 flex items-center justify-center">
         {loadingMore && (
-          <div className="flex items-center gap-2 text-xs text-ink/60 dark:text-stone-400 animate-pulse">
-            <svg className="animate-spin h-4 w-4 text-moss" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            Loading more campus items…
+          <div className="flex items-center gap-2 text-xs text-text-secondary">
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            <span>Loading more listings…</span>
           </div>
+        )}
+        {!loading && !hasMore && products.length > 0 && (
+          <p className="text-xs text-text-tertiary">End of listings</p>
         )}
       </div>
     </div>

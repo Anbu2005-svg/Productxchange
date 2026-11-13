@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { subscribePush, triggerTestPush, getToken } from "@/lib/api";
 import { useToast } from "@/components/Toast";
+import Button from "@/components/ui/Button";
+import { Bell, X, Check } from "lucide-react";
 
 export default function PushNotificationBanner() {
   const { showToast } = useToast();
@@ -33,15 +35,15 @@ export default function PushNotificationBanner() {
       setPermission(perm);
 
       if (perm === "granted") {
-        showToast("🔔 Push notifications enabled! Registering device…", "success");
+        showToast("Notifications enabled", "success");
 
-        // Register with Service Worker if available
         if ("serviceWorker" in navigator) {
           try {
             const reg = await navigator.serviceWorker.ready;
             const sub = await reg.pushManager.subscribe({
               userVisibleOnly: true,
-              applicationServerKey: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U",
+              applicationServerKey:
+                "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U",
             });
 
             const p256dh = sub.getKey("p256dh");
@@ -53,7 +55,6 @@ export default function PushNotificationBanner() {
               auth: auth ? btoa(String.fromCharCode(...new Uint8Array(auth))) : undefined,
             });
           } catch {
-            // Fallback for browsers with strict push worker sandbox
             if (getToken()) {
               await subscribePush({
                 endpoint: `browser-direct-${Date.now()}`,
@@ -61,10 +62,8 @@ export default function PushNotificationBanner() {
             }
           }
         }
-
-        showToast("✅ Device ready! You'll receive instant alerts for offers.", "success");
       } else {
-        showToast("Notification permission was denied.", "info");
+        showToast("Notification permission was not granted", "info");
       }
     } catch (e: any) {
       showToast(e.message || "Failed to enable notifications", "error");
@@ -76,16 +75,16 @@ export default function PushNotificationBanner() {
   async function handleTestAlert() {
     try {
       if (typeof window !== "undefined" && Notification.permission === "granted") {
-        new Notification("🔔 ProductXchange Alert", {
-          body: "Push alerts are working! You'll get notified immediately when a buyer makes an offer.",
+        new Notification("ProductXchange", {
+          body: "Notifications are working for incoming offers and deal confirmations.",
           icon: "/icons/icon-192x192.png",
         });
       }
       await triggerTestPush();
       setTested(true);
-      showToast("🔔 Test notification dispatched!", "success");
+      showToast("Test notification sent", "success");
     } catch {
-      showToast("Test notification sent to your connected devices", "info");
+      showToast("Test notification sent", "info");
     }
   }
 
@@ -99,43 +98,52 @@ export default function PushNotificationBanner() {
   }
 
   return (
-    <div className="bg-emerald-900/90 text-white px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 border-b border-emerald-700/50 backdrop-blur-md">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-muted px-4 py-2.5 text-xs text-text">
       <div className="flex items-center gap-2">
-        <span className="text-base animate-bounce">🔔</span>
-        <span className="font-medium">
+        <Bell className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.75} />
+        <span>
           {permission === "granted"
-            ? "Push notifications are active for instant buyer offers & meetup handoffs."
-            : "Enable browser push notifications to get instant alerts when someone makes an offer on your listings!"}
+            ? "Notifications are active for deal updates and physical meetup handovers."
+            : "Enable browser notifications to receive alerts when fellow students make offers."}
         </span>
       </div>
 
       <div className="flex items-center gap-2">
         {permission !== "granted" ? (
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             disabled={subscribing}
             onClick={handleEnablePush}
-            className="px-3 py-1 bg-white text-emerald-950 font-bold rounded-lg hover:bg-emerald-100 transition-colors shadow-sm disabled:opacity-50"
           >
-            {subscribing ? "Enabling…" : "Enable Alerts"}
-          </button>
+            <span>{subscribing ? "Enabling..." : "Enable notifications"}</span>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={handleTestAlert}
-            className="px-2.5 py-0.5 bg-emerald-800 text-emerald-100 border border-emerald-600 rounded-md font-semibold hover:bg-emerald-700 transition-colors"
           >
-            {tested ? "✓ Alert Sent" : "Test Push 🔔"}
-          </button>
+            {tested ? (
+              <>
+                <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                <span>Test sent</span>
+              </>
+            ) : (
+              <span>Test alert</span>
+            )}
+          </Button>
         )}
 
         <button
           type="button"
           onClick={handleDismiss}
-          className="text-white/60 hover:text-white px-1.5 py-0.5 rounded text-xs transition-colors"
-          title="Dismiss banner"
+          className="rounded p-1 text-text-tertiary transition-colors hover:bg-surface hover:text-text"
+          aria-label="Dismiss notification banner"
         >
-          ✕
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

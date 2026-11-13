@@ -4,22 +4,49 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { api, Product, resolveImageUrl, User, reportListing, saveProduct, unsaveProduct, getToken } from "@/lib/api";
+import {
+  api,
+  Product,
+  resolveImageUrl,
+  User,
+  reportListing,
+  saveProduct,
+  unsaveProduct,
+  getToken,
+} from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
-
-const CampusMap = dynamic(() => import("@/components/CampusMap"), {
-  ssr: false,
-  loading: () => <div className="h-44 rounded-xl bg-stone-100 dark:bg-stone-800 animate-pulse" />,
-});
 import Product3DViewer from "@/components/Product3DViewer";
 import { useToast } from "@/components/Toast";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Modal from "@/components/ui/Modal";
+import { Badge, TypeTag } from "@/components/ui/Badge";
+import {
+  Bookmark,
+  Share2,
+  Flag,
+  MessageSquare,
+  ShieldCheck,
+  MapPin,
+  Clock,
+  ArrowLeft,
+  MoreVertical,
+  RotateCw,
+  Image as ImageIcon,
+  Check,
+  Calendar,
+  AlertCircle,
+  HelpCircle,
+} from "lucide-react";
 
-const typeBadges: Record<string, { bg: string }> = {
-  BUY: { bg: "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800" },
-  EXCHANGE: { bg: "bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-800" },
-  RENT: { bg: "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800" },
-  DONATE: { bg: "bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950/40 dark:text-purple-200 dark:border-purple-800" },
-};
+function formatPrice(price?: number | null) {
+  if (price == null || price === 0) return "Free";
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(price);
+}
 
 export default function ListingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -38,14 +65,15 @@ export default function ListingDetailPage() {
   const [startingChat, setStartingChat] = useState(false);
   const [bumping, setBumping] = useState(false);
 
-  // Lightbox & Report & Similar products states
-  const [lightboxOpen, setLightboxOpen] = useState(false);
+  // Modals & Menu
+  const [offerModalOpen, setOfferModalOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("Counterfeit or Misleading");
+  const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("Counterfeit or misleading");
   const [reportDetails, setReportDetails] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
   const [similarProducts, setSimilarProducts] = useState<Product[]>([]);
-  const [activeMediaTab, setActiveMediaTab] = useState<"2d" | "3d">("3d");
+  const [activeMediaTab, setActiveMediaTab] = useState<"2d" | "3d">("2d");
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
@@ -64,10 +92,10 @@ export default function ListingDetailPage() {
     try {
       if (next) {
         await saveProduct(Number(id));
-        showToast("Saved to your watchlist! ❤️", "success");
+        showToast("Saved to your list", "success");
       } else {
         await unsaveProduct(Number(id));
-        showToast("Removed from your watchlist", "info");
+        showToast("Removed from your list", "info");
       }
     } catch {
       setIsSaved(!next);
@@ -89,8 +117,7 @@ export default function ListingDetailPage() {
         if (data.price) {
           setOfferAmount(String(data.price));
         }
-        // Display all products in 3D by default whenever images are available
-        if (data.image_urls && data.image_urls.length > 0) {
+        if (data.has_3d || (data.image_urls && data.image_urls.length > 1)) {
           setActiveMediaTab("3d");
         }
       })
@@ -98,109 +125,105 @@ export default function ListingDetailPage() {
   }, [id, router]);
 
   useEffect(() => {
-    if (product?.category) {
-      const lat = product.latitude || 12.9716;
-      const lng = product.longitude || 77.5946;
-      api(`/products/nearby/search?lat=${lat}&lng=${lng}&category=${encodeURIComponent(product.category)}&radius_km=50&limit=6`)
-        .then((items: Product[]) => {
-          setSimilarProducts(items.filter((p) => p.id !== product.id).slice(0, 4));
-        })
-        .catch(() => {});
-    }
-  }, [product?.id, product?.category]);
-
-  async function sendOffer() {
     if (!product) return;
+    const cat = encodeURIComponent(product.category);
+    api(`/products?category=${cat}&limit=5`)
+      .then((res) => {
+        const items: Product[] = Array.isArray(res) ? res : res.items || [];
+        setSimilarProducts(items.filter((p) => p.id !== product.id).slice(0, 4));
+      })
+      .catch(() => {});
+  }, [product]);
+
+  const images = product?.image_urls || [];
+  const currentImage = images[selectedImageIndex] || images[0] || null;
+  const isSeller = currentUser && product && currentUser.id === product.seller_id;
+
+  async function handleStartChat() {
     if (!currentUser) {
-      showToast("Please sign in to make an offer or coordinate meetup", "info");
       router.push(`/login?redirect=/listings/${id}`);
       return;
     }
-    setError(null);
-    setSubmittingOffer(true);
+    if (!product) return;
+
+    setStartingChat(true);
     try {
-      const isBuy = product.transaction_type === "BUY";
+      const convo = await api("/chat/conversations/start", {
+        method: "POST",
+        body: JSON.stringify({
+          recipient_id: product.seller_id,
+          product_id: product.id,
+        }),
+      });
+      router.push(`/chat/${convo.id}`);
+    } catch (e: any) {
+      showToast(e.message || "Failed to start conversation", "error");
+    } finally {
+      setStartingChat(false);
+    }
+  }
+
+  async function handleCreateOffer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!currentUser) {
+      router.push(`/login?redirect=/listings/${id}`);
+      return;
+    }
+    if (!product) return;
+
+    setSubmittingOffer(true);
+    setStatus(null);
+    try {
       const isRent = product.transaction_type === "RENT";
-      const isExchange = product.transaction_type === "EXCHANGE";
-      const isDonate = product.transaction_type === "DONATE";
-
-      let finalAmount: number | null = null;
-      if (isBuy || isRent) {
-        finalAmount = offerAmount ? Number(offerAmount) : (product.price || null);
-      } else if (isExchange || isDonate) {
-        finalAmount = 0.0;
-      }
-
       const payload: any = {
         product_id: product.id,
-        offer_amount: finalAmount,
-        notes: notes || null,
+        offer_amount: offerAmount ? parseFloat(offerAmount) : product.price,
+        notes: notes.trim() || undefined,
       };
-
-      if (isRent) {
-        payload.rental_period_days = rentalDays ? Math.max(1, Math.min(365, Number(rentalDays))) : 30;
+      if (isRent && rentalDays) {
+        payload.rental_period_days = parseInt(rentalDays, 10);
       }
 
-      const res = await api("/transactions", {
+      const tx = await api("/transactions", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      setCreatedTxId(res.id);
-      setStatus("Offer sent successfully! The seller has been notified.");
-      showToast("📤 Offer sent successfully!", "success");
-    } catch (e: any) {
-      setError(e.message);
-      showToast(e.message, "error");
+
+      setCreatedTxId(tx.id);
+      setStatus("Offer submitted. The seller has been notified.");
+      showToast("Offer sent to seller", "success");
+      setOfferModalOpen(false);
+      router.push("/deals");
+    } catch (err: any) {
+      showToast(err.message || "Failed to submit offer", "error");
     } finally {
       setSubmittingOffer(false);
     }
   }
 
-  async function handleMessageSeller() {
+  async function handleBumpListing() {
     if (!product) return;
-    if (!currentUser) {
-      showToast("Please sign in to message this seller", "info");
-      router.push(`/login?redirect=/listings/${id}`);
-      return;
-    }
-    setStartingChat(true);
+    setBumping(true);
     try {
-      const res = await api(`/chat/conversations/start?other_user_id=${product.seller_id}&product_id=${product.id}`, {
-        method: "POST",
-      });
-      router.push(`/chat/${res.conversation_id}`);
-    } catch (e: any) {
-      showToast(e.message || "Please log in to message sellers", "error");
-      setStartingChat(false);
+      const updated = await api(`/products/${product.id}/bump`, { method: "POST" });
+      setProduct(updated);
+      showToast("Listing bumped to top of search", "success");
+    } catch (err: any) {
+      showToast(err.message || "Could not bump listing", "error");
+    } finally {
+      setBumping(false);
     }
   }
 
-  // Feature #10: Share Listing
-  function handleCopyLink() {
-    if (typeof window !== "undefined") {
-      navigator.clipboard.writeText(window.location.href);
-      showToast("🔗 Listing link copied to clipboard!", "success");
-    }
-  }
-
-  function handleShareWhatsApp() {
-    if (!product || typeof window === "undefined") return;
-    const text = `Check out "${product.title}" on ProductXchange for ₹${product.price || 0}! Meetup at campus: ${window.location.href}`;
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
-  }
-
-  function handleNativeShare() {
-    if (!product || typeof window === "undefined") return;
-    if (navigator.share) {
-      navigator
-        .share({
-          title: product.title,
-          text: `Check out this listing on ProductXchange!`,
-          url: window.location.href,
-        })
-        .catch(() => {});
-    } else {
-      handleCopyLink();
+  async function handleDeleteListing() {
+    if (!product) return;
+    if (!confirm("Are you sure you want to remove this listing?")) return;
+    try {
+      await api(`/products/${product.id}`, { method: "DELETE" });
+      showToast("Listing removed", "info");
+      router.push("/");
+    } catch (err: any) {
+      showToast(err.message || "Failed to delete listing", "error");
     }
   }
 
@@ -209,159 +232,131 @@ export default function ListingDetailPage() {
     if (!product) return;
     setSubmittingReport(true);
     try {
-      await reportListing(product.id, reportReason, reportDetails);
-      showToast("🚩 Report submitted. Campus moderators will review it shortly.", "success");
+      await reportListing(
+        product.id,
+        reportReason,
+        reportDetails.trim() || undefined
+      );
+      showToast("Report submitted to campus moderators", "info");
       setReportModalOpen(false);
-      setReportDetails("");
-    } catch (e: any) {
-      showToast(e.message || "Failed to submit report", "error");
+    } catch (err: any) {
+      showToast(err.message || "Failed to submit report", "error");
     } finally {
       setSubmittingReport(false);
     }
   }
 
-  // Feature #12: Bump Listing
-  async function handleBumpListing() {
-    if (!product) return;
-    setBumping(true);
-    try {
-      const updated = await api(`/products/${product.id}/bump`, { method: "POST" });
-      setProduct(updated);
-      showToast("🚀 Listing bumped to top of recent searches!", "success");
-    } catch (e: any) {
-      showToast(e.message || "Failed to bump listing", "error");
-    } finally {
-      setBumping(false);
+  function handleCopyLink() {
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(window.location.href);
+      showToast("Link copied to clipboard", "success");
+      setOverflowMenuOpen(false);
     }
   }
 
-  if (error && !product) {
+  if (error) {
     return (
-      <div className="max-w-xl mx-auto py-12 text-center animate-fade-in">
-        <p className="text-clay text-base font-semibold mb-3">{error}</p>
-        <Link href="/" className="text-sm text-moss dark:text-emerald-400 hover:underline">
-          ← Back to nearby listings
-        </Link>
+      <div className="py-8 space-y-4 max-w-lg mx-auto text-center">
+        <div className="p-4 bg-surface border border-danger/30 rounded-md text-xs text-danger">
+          {error}
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => router.push("/")}>
+          Return to listings
+        </Button>
       </div>
     );
   }
 
   if (!product) {
     return (
-      <div className="max-w-xl mx-auto py-12 text-center text-ink/60 dark:text-stone-400">
-        <div className="animate-pulse">Loading listing details…</div>
+      <div className="py-12 flex flex-col items-center justify-center text-xs text-text-tertiary">
+        Loading listing details…
       </div>
     );
   }
 
-  const badge = typeBadges[product.transaction_type] || { bg: "bg-gray-100 text-gray-800 border-gray-200" };
-  const images = product.image_urls || [];
-  const currentImage = images[selectedImageIndex] || null;
-  const isSeller = currentUser?.id === product.seller_id;
-
   return (
-    <div className="max-w-3xl mx-auto py-3 sm:py-4 px-1 sm:px-4 animate-fade-in">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <Link href="/" className="text-xs text-ink/60 dark:text-stone-400 hover:text-moss dark:hover:text-emerald-400 inline-flex items-center gap-1 font-medium">
-          ← Back to listings
+    <div className="space-y-6 pb-20 md:pb-6">
+      {/* Top Breadcrumb & Actions */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-text-secondary hover:text-text transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to listings</span>
         </Link>
 
-        {/* Action Buttons: Edit, Report, Share */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Save / Wishlist Button */}
+        {/* Overflow Menu: Share & Report */}
+        <div className="relative">
           <button
-            onClick={handleToggleSave}
-            className={`text-xs font-semibold px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-all ${
-              isSaved
-                ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800"
-                : "bg-sand dark:bg-stone-800 text-ink/70 dark:text-stone-300 border-ink/15 dark:border-stone-700 hover:bg-white dark:hover:bg-stone-700"
-            }`}
-            title={isSaved ? "Saved to watchlist" : "Save to watchlist"}
+            type="button"
+            onClick={() => setOverflowMenuOpen(!overflowMenuOpen)}
+            aria-label="More options"
+            className="p-1.5 rounded-sm text-text-secondary hover:text-text hover:bg-surface-muted transition-colors"
           >
-            <span>{isSaved ? "❤️" : "🤍"}</span> {isSaved ? "Saved" : "Save"}
+            <MoreVertical className="w-4 h-4" />
           </button>
 
-          {isSeller ? (
-            <Link
-              href={`/listings/edit/${product.id}`}
-              className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 flex items-center gap-1 transition-colors"
-            >
-              <span>✏️</span> Edit Listing
-            </Link>
-          ) : (
-            <button
-              onClick={() => setReportModalOpen(true)}
-              className="text-xs font-medium px-2 py-1 rounded-lg text-ink/50 dark:text-stone-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1"
-              title="Report suspicious or abusive listing"
-            >
-              <span>🚩</span> Report
-            </button>
-          )}
-
-          <button
-            onClick={handleShareWhatsApp}
-            className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-100 flex items-center gap-1 transition-colors"
-            title="Share on WhatsApp"
-          >
-            <span>💬</span> WhatsApp
-          </button>
-          <button
-            onClick={handleCopyLink}
-            className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-sand dark:bg-stone-800 text-ink/70 dark:text-stone-300 border border-ink/15 dark:border-stone-700 hover:bg-white dark:hover:bg-stone-700 flex items-center gap-1 transition-colors"
-            title="Copy link to clipboard"
-          >
-            <span>🔗</span> Copy
-          </button>
-          {typeof navigator !== "undefined" && typeof navigator.share === "function" && (
-            <button
-              onClick={handleNativeShare}
-              className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-sand dark:bg-stone-800 text-ink/70 dark:text-stone-300 border border-ink/15 dark:border-stone-700 hover:bg-white dark:hover:bg-stone-700 flex items-center gap-1 transition-colors"
-              title="Share"
-            >
-              <span>📤</span> Share
-            </button>
+          {overflowMenuOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-surface border border-border rounded-md shadow-overlay py-1 z-30 text-xs">
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="w-full text-left px-3 py-2 text-text hover:bg-surface-muted flex items-center gap-2"
+              >
+                <Share2 className="w-3.5 h-3.5 text-text-tertiary" />
+                <span>Copy link</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOverflowMenuOpen(false);
+                  setReportModalOpen(true);
+                }}
+                className="w-full text-left px-3 py-2 text-danger hover:bg-surface-muted flex items-center gap-2"
+              >
+                <Flag className="w-3.5 h-3.5 text-danger" />
+                <span>Report listing</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 bg-white/95 dark:bg-[#1a211d]/95 backdrop-blur-xl border border-ink/8 dark:border-white/10 rounded-3xl p-5 sm:p-7 shadow-xs transition-colors">
-        {/* Photo Gallery Column */}
-        <div className="flex flex-col gap-3">
-          {/* 2D / 3D Mode Switcher (Display all products in 3D) */}
+      {/* Main 2-Column Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 bg-surface border border-border rounded-md p-4 sm:p-6">
+        {/* Gallery Column */}
+        <div className="space-y-3">
           {images.length > 0 && (
-            <div className="flex items-center justify-between bg-sand/70 dark:bg-stone-800 p-1 rounded-xl border border-ink/10 dark:border-stone-700">
+            <div className="flex items-center justify-between border-b border-border pb-2">
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setActiveMediaTab("3d")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    activeMediaTab === "3d"
-                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm"
-                      : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
+                  onClick={() => setActiveMediaTab("2d")}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-xs transition-colors ${
+                    activeMediaTab === "2d"
+                      ? "bg-surface-muted text-text font-semibold"
+                      : "text-text-secondary hover:text-text"
                   }`}
                 >
-                  <span>🧊</span> Interactive 3D Model
+                  Photos ({images.length})
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveMediaTab("2d")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    activeMediaTab === "2d"
-                      ? "bg-white dark:bg-stone-900 text-ink dark:text-white shadow-sm"
-                      : "text-ink/60 dark:text-stone-400 hover:text-ink dark:hover:text-white"
+                  onClick={() => setActiveMediaTab("3d")}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-xs transition-colors ${
+                    activeMediaTab === "3d"
+                      ? "bg-surface-muted text-text font-semibold"
+                      : "text-text-secondary hover:text-text"
                   }`}
                 >
-                  <span>🖼️</span> 2D Photos ({images.length})
+                  3D View
                 </button>
               </div>
-
-              <span className="hidden sm:inline-block text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 px-2">
-                {product.has_3d ? "✨ 360° Photogrammetry" : "🧊 Interactive 3D Projection"}
-              </span>
             </div>
           )}
 
-          {/* Active View: 3D Viewer vs 2D Gallery */}
           {activeMediaTab === "3d" ? (
             <Product3DViewer
               angles={product.image_angles}
@@ -369,283 +364,251 @@ export default function ListingDetailPage() {
               title={product.title}
             />
           ) : (
-            <>
-              <div className="relative aspect-[4/3] w-full rounded-xl overflow-hidden bg-sand/60 dark:bg-stone-800 border border-ink/10 dark:border-stone-700 flex items-center justify-center">
+            <div className="space-y-2">
+              <div className="relative aspect-[4/3] w-full rounded-sm overflow-hidden bg-surface-muted border border-border flex items-center justify-center">
                 {currentImage ? (
                   <img
                     src={resolveImageUrl(currentImage)}
                     alt={product.title}
-                    onClick={() => setLightboxOpen(true)}
-                    className="w-full h-full object-cover cursor-zoom-in hover:scale-[1.02] transition-transform duration-200"
-                    title="Click to view full size"
+                    className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center text-ink/40 dark:text-stone-500 p-6 text-center">
-                    <svg className="w-16 h-16 mb-2 stroke-current stroke-1" fill="none" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p className="text-xs font-medium text-ink/60 dark:text-stone-400">No photo uploaded</p>
-                  </div>
+                  <div className="text-xs text-text-tertiary">No photo available</div>
                 )}
-                <span
-                  className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider border backdrop-blur-sm ${badge.bg}`}
-                >
-                  {product.transaction_type}
-                </span>
               </div>
 
-              {/* Thumbnails if multiple images exist */}
               {images.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {images.map((img, idx) => (
                     <button
                       key={idx}
+                      type="button"
                       onClick={() => setSelectedImageIndex(idx)}
-                      className={`relative w-16 h-16 rounded-lg overflow-hidden border-2 shrink-0 ${
-                        selectedImageIndex === idx ? "border-moss" : "border-transparent opacity-70"
+                      className={`relative w-14 h-14 rounded-xs overflow-hidden border shrink-0 ${
+                        selectedImageIndex === idx ? "border-primary" : "border-border opacity-70"
                       }`}
                     >
-                      <img src={resolveImageUrl(img)} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" />
+                      <img
+                        src={resolveImageUrl(img)}
+                        alt={`Thumbnail ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
                     </button>
                   ))}
                 </div>
               )}
-            </>
+            </div>
           )}
 
-          {/* Feature #12: Listing Lifecycle & Expiry Indicator */}
-          <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-sand/50 dark:bg-stone-800 border border-ink/10 dark:border-stone-700">
-            <span className="text-ink/70 dark:text-stone-300 flex items-center gap-1.5">
-              <span>📅</span>
-              {product.is_expired ? (
-                <strong className="text-rose-600 dark:text-rose-400">Listing Expired (30+ days)</strong>
-              ) : (
-                <span>Expires in <strong>{product.days_remaining ?? 30} days</strong></span>
-              )}
-            </span>
-            {isSeller && (
-              <button
-                onClick={handleBumpListing}
-                disabled={bumping}
-                className="text-[11px] font-semibold text-moss dark:text-emerald-400 hover:underline flex items-center gap-1"
-                title="Bumping refreshes your item to the top of campus search"
-              >
-                <span>🚀</span> {bumping ? "Bumping…" : "Bump to Top"}
-              </button>
-            )}
-          </div>
-
-          {/* Privacy Location Card */}
-          <div className="rounded-xl border border-ink/10 dark:border-stone-700 p-3.5 bg-sand/30 dark:bg-stone-800/40 text-xs text-ink/80 dark:text-stone-300 space-y-1.5">
-            <p className="font-semibold text-ink dark:text-white flex items-center gap-1.5">
-              <span>📍</span>
-              {product.pickup_area ? "Confirmed Pickup Location" : "Campus Vicinity (~1.1 km radius)"}
-            </p>
+          {/* Approximate Location Notice */}
+          <div className="p-3 bg-surface-muted rounded-sm border border-border text-xs space-y-1">
+            <div className="flex items-center gap-1.5 font-medium text-text">
+              <MapPin className="w-3.5 h-3.5 text-text-tertiary" />
+              <span>
+                {product.pickup_area ? "Pickup location" : "Campus vicinity (~1.1 km)"}
+              </span>
+            </div>
             {product.pickup_area ? (
-              <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-emerald-900 dark:text-emerald-200 font-medium">
-                {product.pickup_area}
-              </div>
+              <p className="text-text-secondary font-mono">{product.pickup_area}</p>
             ) : (
-              <p className="text-ink/60 dark:text-stone-400 leading-normal">
-                To protect student dorm and personal privacy, exact meetup instructions and pickup spots are unlocked once the offer is confirmed by both parties.
+              <p className="text-text-tertiary leading-relaxed">
+                Location is approximate to protect privacy. Exact meetup notes unlock when a deal is confirmed.
               </p>
             )}
           </div>
-
-          {/* Interactive Campus Vicinity Mini-Map */}
-          {product.latitude != null && product.longitude != null && (
-            <div className="mt-1 overflow-hidden rounded-xl border border-ink/10 dark:border-stone-700 shadow-2xs">
-              <CampusMap
-                products={[product]}
-                userCoords={{ lat: product.latitude, lng: product.longitude }}
-                radiusKm={1}
-                height="190px"
-              />
-            </div>
-          )}
         </div>
 
-        {/* Product Details & Negotiation Column */}
-        <div className="flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-xs text-ink/60 dark:text-stone-400 mb-1">
-              <span>Category: <strong className="text-ink dark:text-stone-200 font-semibold">{product.category}</strong></span>
-              <span>Condition: <strong className="text-ink dark:text-stone-200 font-semibold">{product.condition || "Good"}</strong></span>
+        {/* Details Column */}
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <TypeTag type={product.transaction_type} />
+              <Badge status={product.status as any}>{product.status}</Badge>
             </div>
+            <h1 className="text-xl sm:text-2xl font-semibold text-text tracking-tight">
+              {product.title}
+            </h1>
+            <p className="text-2xl font-semibold text-text tabular-nums pt-1">
+              {formatPrice(product.price)}
+            </p>
+          </div>
 
-            <h1 className="text-2xl font-bold text-ink dark:text-white mt-1">{product.title}</h1>
-
-            {/* Seller Link & Campus Hub */}
-            <div className="mt-2 flex items-center gap-3 flex-wrap">
-              <Link
-                href={`/profile/${product.seller_id}`}
-                className="inline-flex items-center gap-1.5 text-xs text-ink/60 dark:text-stone-400 hover:text-moss dark:hover:text-emerald-400 transition-colors group"
-              >
-                <div className="w-5 h-5 rounded-full bg-moss/10 dark:bg-moss/20 flex items-center justify-center text-[9px] font-bold text-moss dark:text-emerald-300 border border-moss/20 group-hover:bg-moss/20 transition-colors">
-                  S
-                </div>
-                <span className="underline-offset-2 group-hover:underline">View Seller Profile</span>
-              </Link>
-
-              {product.college && (
-                <div className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                  <span>🏫</span>
-                  <span>{product.college}</span>
-                </div>
-              )}
+          {/* Meta Specifications Table */}
+          <div className="grid grid-cols-2 gap-2 py-3 border-y border-border text-xs">
+            <div>
+              <span className="text-text-tertiary block">Category</span>
+              <span className="text-text font-medium">{product.category}</span>
             </div>
-
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-moss dark:text-emerald-400">
-                {product.price != null && product.price > 0
-                  ? `₹${product.price.toLocaleString("en-IN")}`
-                  : product.transaction_type === "DONATE"
-                  ? "Free"
-                  : "Offer Based"}
+            <div>
+              <span className="text-text-tertiary block">Condition</span>
+              <span className="text-text font-medium">{product.condition || "Not specified"}</span>
+            </div>
+            {product.college && (
+              <div>
+                <span className="text-text-tertiary block">College</span>
+                <span className="text-text font-medium">{product.college}</span>
+              </div>
+            )}
+            <div>
+              <span className="text-text-tertiary block">Listing status</span>
+              <span className="text-text font-medium">
+                {product.is_expired ? "Expired" : `${product.days_remaining ?? 30} days remaining`}
               </span>
-              {product.transaction_type === "RENT" && (
-                <span className="text-xs text-ink/60 dark:text-stone-400 font-medium">/ rental period</span>
-              )}
-            </div>
-
-            <div className="mt-4 border-t border-ink/10 dark:border-stone-800 pt-4">
-              <h2 className="text-xs uppercase font-semibold text-ink/50 dark:text-stone-400 tracking-wider mb-1.5">
-                Item Description
-              </h2>
-              <p className="text-sm text-ink/80 dark:text-stone-300 leading-relaxed whitespace-pre-line">
-                {product.description || "The student seller did not provide an extended description."}
-              </p>
             </div>
           </div>
 
-          {/* Message Seller Button */}
-          {!isSeller && (
-            <div className="mt-4">
-              <button
-                onClick={handleMessageSeller}
-                disabled={startingChat}
-                className="w-full bg-white dark:bg-stone-800 border border-ink/15 dark:border-stone-700 text-ink dark:text-white font-semibold py-2.5 px-4 rounded-xl hover:border-moss hover:text-moss dark:hover:border-emerald-400 dark:hover:text-emerald-400 transition-all text-sm flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
-              >
-                {startingChat ? "Opening chat…" : "💬 Message Seller"}
-              </button>
+          {/* Description */}
+          {product.description && (
+            <div className="space-y-1">
+              <h2 className="text-xs font-semibold text-text uppercase tracking-wider">
+                Description
+              </h2>
+              <p className="text-sm text-text-secondary whitespace-pre-line leading-relaxed">
+                {product.description}
+              </p>
             </div>
           )}
 
-          {/* Make an Offer / Negotiation Box */}
-          {!isSeller && (
-            <div className="mt-4 border-t border-ink/10 dark:border-stone-800 pt-4">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="text-sm font-bold text-ink dark:text-white">
-                  {product.transaction_type === "RENT" && "Request Rental / Propose Terms"}
-                  {product.transaction_type === "EXCHANGE" && "Propose Campus Exchange"}
-                  {product.transaction_type === "DONATE" && "Request Free Donation Pickup"}
-                  {product.transaction_type === "BUY" && "Start Deal / Make an Offer"}
-                </h3>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border border-ink/10 dark:border-stone-700 bg-sand/60 dark:bg-stone-800 text-ink/70 dark:text-stone-300">
-                  {product.transaction_type}
-                </span>
-              </div>
-              <p className="text-xs text-ink/60 dark:text-stone-400 mb-3">
-                {product.transaction_type === "RENT" && "Specify your proposed rental rate and duration. Handover is verified via secure PIN."}
-                {product.transaction_type === "EXCHANGE" && "Propose an exchange with the seller. Mention the item you wish to trade in notes."}
-                {product.transaction_type === "DONATE" && "This academic item is freely donated! Send a request to coordinate campus pickup."}
-                {product.transaction_type === "BUY" && "Propose your price or accept listing price. Coordinate safely via the Deals dashboard."}
-              </p>
-
-              <div className="space-y-2.5">
-                {(product.transaction_type === "BUY" || product.transaction_type === "RENT") && (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-2.5 text-xs text-ink/40 dark:text-stone-500 font-bold">₹</span>
-                      <input
-                        className="w-full border border-ink/20 dark:border-stone-700 rounded-lg pl-7 pr-3 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 font-semibold focus:outline-none focus:border-moss"
-                        placeholder={product.transaction_type === "RENT" ? "Rental rate" : "Offer price"}
-                        type="number"
-                        min="1"
-                        value={offerAmount}
-                        onChange={(e) => setOfferAmount(e.target.value)}
-                      />
-                    </div>
-                    {product.transaction_type === "RENT" && (
-                      <div className="relative w-full sm:w-36">
-                        <input
-                          className="w-full border border-ink/20 dark:border-stone-700 rounded-lg px-3 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 font-semibold focus:outline-none focus:border-moss"
-                          placeholder="Days (30)"
-                          type="number"
-                          min="1"
-                          max="365"
-                          value={rentalDays}
-                          onChange={(e) => setRentalDays(e.target.value)}
-                          title="Rental duration in days"
-                        />
-                      </div>
+          {/* Seller Profile Block */}
+          {product.seller && (
+            <div className="p-3.5 bg-surface-muted rounded-sm border border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-surface border border-border flex items-center justify-center font-medium text-xs text-text overflow-hidden">
+                  {product.seller.avatar_url ? (
+                    <img
+                      src={resolveImageUrl(product.seller.avatar_url)}
+                      alt={product.seller.full_name || "Seller"}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    product.seller.full_name?.charAt(0) || "S"
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-text">
+                      {product.seller.full_name || "Campus peer"}
+                    </span>
+                    {product.seller.is_verified && (
+                      <span title="Campus verified" className="inline-flex">
+                        <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                      </span>
                     )}
                   </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    className="flex-1 border border-ink/20 dark:border-stone-700 rounded-lg px-3 py-2 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-                    placeholder={
-                      product.transaction_type === "EXCHANGE"
-                        ? "Describe the item you are trading (e.g. Mini Drafter in good shape)"
-                        : product.transaction_type === "DONATE"
-                        ? "Brief note (e.g. 1st year student, can meet after class at library)"
-                        : "Optional note (e.g. Can meet after 4 PM at cafeteria)"
-                    }
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                  <button
-                    onClick={sendOffer}
-                    disabled={submittingOffer}
-                    className="bg-moss text-white text-sm font-semibold rounded-lg px-5 py-2 hover:bg-moss/90 disabled:opacity-50 transition-colors shrink-0 shadow-sm touch-manipulation"
-                  >
-                    {submittingOffer
-                      ? "Sending…"
-                      : product.transaction_type === "RENT"
-                      ? "Request Rental"
-                      : product.transaction_type === "EXCHANGE"
-                      ? "Propose Exchange"
-                      : product.transaction_type === "DONATE"
-                      ? "Request Free Pickup"
-                      : "Send Offer"}
-                  </button>
+                  <p className="text-[11px] text-text-tertiary">
+                    {product.seller.college || "Verified student"} • ★ {product.seller.avg_rating || "5.0"}
+                  </p>
                 </div>
               </div>
 
-              {status && (
-                <div className="mt-3 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs text-emerald-900 dark:text-emerald-200 flex flex-col gap-2">
-                  <span>{status}</span>
-                  <Link
-                    href="/deals"
-                    className="inline-flex items-center gap-1 font-semibold text-emerald-800 dark:text-emerald-300 underline hover:text-emerald-950"
-                  >
-                    Go to Deals & Negotiation Dashboard →
-                  </Link>
-                </div>
-              )}
-
-              {error && (
-                <p className="text-xs text-clay mt-2.5 font-medium bg-red-50 dark:bg-red-950/40 p-2 rounded border border-red-200 dark:border-red-900">
-                  {error}
-                </p>
+              {!isSeller && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleStartChat}
+                  loading={startingChat}
+                >
+                  <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+                  <span>Message</span>
+                </Button>
               )}
             </div>
           )}
+
+          {/* Action Buttons for Desktop */}
+          <div className="pt-2 flex items-center gap-2">
+            {isSeller ? (
+              <div className="flex items-center gap-2 w-full">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={handleBumpListing}
+                  loading={bumping}
+                  className="flex-1"
+                >
+                  <RotateCw className="w-3.5 h-3.5 mr-1.5" />
+                  <span>Bump to top</span>
+                </Button>
+                <Link href={`/listings/edit/${product.id}`} className="flex-1">
+                  <Button variant="secondary" size="md" className="w-full">
+                    Edit listing
+                  </Button>
+                </Link>
+                <Button
+                  variant="destructive"
+                  size="md"
+                  onClick={handleDeleteListing}
+                >
+                  Remove
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 w-full">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => setOfferModalOpen(true)}
+                  className="flex-1"
+                >
+                  {product.transaction_type === "RENT"
+                    ? "Rent this item"
+                    : product.transaction_type === "DONATE"
+                    ? "Claim free item"
+                    : "Make an offer"}
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={handleToggleSave}
+                  aria-label={isSaved ? "Saved" : "Save item"}
+                >
+                  <Bookmark
+                    className="w-4 h-4"
+                    fill={isSaved ? "currentColor" : "none"}
+                  />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Similar Campus Listings Section */}
+      {/* Sticky Bottom Action Bar on Mobile */}
+      {!isSeller && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-border p-3 safe-area-bottom flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={handleStartChat}
+            loading={startingChat}
+            className="flex-1"
+          >
+            <MessageSquare className="w-4 h-4 mr-1.5" />
+            <span>Message</span>
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setOfferModalOpen(true)}
+            className="flex-1"
+          >
+            {product.transaction_type === "RENT"
+              ? "Rent"
+              : product.transaction_type === "DONATE"
+              ? "Claim"
+              : "Make offer"}
+          </Button>
+        </div>
+      )}
+
+      {/* Similar Campus Items */}
       {similarProducts.length > 0 && (
-        <div className="mt-12 border-t border-ink/10 dark:border-stone-800 pt-8">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-ink dark:text-white flex items-center gap-2">
-              <span>🎯</span> Similar Campus Listings in {product.category}
-            </h3>
-            <span className="text-xs text-ink/50 dark:text-stone-400">Within campus vicinity</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="space-y-3 pt-4 border-t border-border">
+          <h2 className="text-xs font-semibold text-text uppercase tracking-wider">
+            Similar campus listings
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {similarProducts.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}
@@ -653,143 +616,126 @@ export default function ListingDetailPage() {
         </div>
       )}
 
-      {/* Full-Screen Image Lightbox Modal */}
-      {lightboxOpen && currentImage && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4 backdrop-blur-md animate-fade-in"
-          onClick={() => setLightboxOpen(false)}
-        >
-          <button
-            onClick={() => setLightboxOpen(false)}
-            className="absolute top-5 right-5 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full w-10 h-10 flex items-center justify-center transition-colors text-xl font-bold"
-            title="Close Lightbox (ESC)"
-          >
-            ✕
-          </button>
-
-          <div className="relative max-w-4xl max-h-[85vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={resolveImageUrl(currentImage)}
-              alt={product.title}
-              className="max-h-[80vh] max-w-full object-contain rounded-xl shadow-2xl"
+      {/* Offer Negotiation Modal */}
+      <Modal
+        isOpen={offerModalOpen}
+        onClose={() => setOfferModalOpen(false)}
+        title={
+          product.transaction_type === "RENT"
+            ? "Rent campus item"
+            : product.transaction_type === "DONATE"
+            ? "Request donation"
+            : "Make transaction offer"
+        }
+        description="Submit your proposed amount and meetup notes to the seller."
+      >
+        <form onSubmit={handleCreateOffer} className="space-y-4">
+          {product.transaction_type !== "DONATE" && (
+            <Input
+              label="Offered price (₹)"
+              type="number"
+              min="0"
+              step="1"
+              required
+              value={offerAmount}
+              onChange={(e) => setOfferAmount(e.target.value)}
+              helperText={`Listing price: ${formatPrice(product.price)}`}
             />
-
-            {images.length > 1 && (
-              <>
-                <button
-                  onClick={() => setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/90 text-white rounded-full w-10 h-10 flex items-center justify-center transition-colors font-bold"
-                  title="Previous image"
-                >
-                  ‹
-                </button>
-                <button
-                  onClick={() => setSelectedImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/90 text-white rounded-full w-10 h-10 flex items-center justify-center transition-colors font-bold"
-                  title="Next image"
-                >
-                  ›
-                </button>
-              </>
-            )}
-          </div>
-
-          {images.length > 1 && (
-            <div className="flex gap-2 mt-4" onClick={(e) => e.stopPropagation()}>
-              {images.map((img, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setSelectedImageIndex(idx)}
-                  className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${
-                    selectedImageIndex === idx ? "border-emerald-400 scale-105" : "border-white/20 opacity-60 hover:opacity-100"
-                  }`}
-                >
-                  <img src={resolveImageUrl(img)} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
           )}
-        </div>
-      )}
 
-      {/* Report Listing Modal */}
-      {reportModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in"
-          onClick={() => setReportModalOpen(false)}
-        >
-          <div
-            className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-stone-700 rounded-2xl max-w-md w-full p-6 shadow-2xl transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-ink dark:text-white flex items-center gap-1.5">
-                <span>🚩</span> Report Listing
-              </h3>
-              <button
-                onClick={() => setReportModalOpen(false)}
-                className="text-ink/40 hover:text-ink dark:text-stone-400 dark:hover:text-white text-lg font-bold"
-              >
-                ✕
-              </button>
-            </div>
+          {product.transaction_type === "RENT" && (
+            <Input
+              label="Rental period (days)"
+              type="number"
+              min="1"
+              max="180"
+              required
+              value={rentalDays}
+              onChange={(e) => setRentalDays(e.target.value)}
+              helperText="Days you wish to rent the item for"
+            />
+          )}
 
-            <p className="text-xs text-ink/70 dark:text-stone-300 mb-4">
-              Please help keep ProductXchange safe. All reports are immediately reviewed by campus student moderators.
-            </p>
-
-            <form onSubmit={handleReportSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-ink dark:text-stone-200 mb-1">
-                  Reason for reporting
-                </label>
-                <select
-                  value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
-                  className="w-full border border-ink/20 dark:border-stone-700 rounded-lg px-3 py-2 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-                >
-                  <option value="Counterfeit or Misleading">Counterfeit or Misleading Information</option>
-                  <option value="Scam or Fraud">Suspicious / Scam / Fraudulent Activity</option>
-                  <option value="Prohibited Campus Item">Prohibited Item on Campus Premises</option>
-                  <option value="Harassment or Abusive Content">Harassment or Inappropriate Content</option>
-                  <option value="Duplicate or Spam">Duplicate Listing or Spam</option>
-                  <option value="Other">Other Violation</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-ink dark:text-stone-200 mb-1">
-                  Additional Details (Optional)
-                </label>
-                <textarea
-                  rows={3}
-                  value={reportDetails}
-                  onChange={(e) => setReportDetails(e.target.value)}
-                  placeholder="Provide any additional context or proof to assist moderators..."
-                  className="w-full border border-ink/20 dark:border-stone-700 rounded-lg p-2.5 text-xs text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setReportModalOpen(false)}
-                  className="px-4 py-2 text-xs font-medium rounded-lg border border-ink/20 dark:border-stone-700 text-ink/70 dark:text-stone-300 hover:bg-sand dark:hover:bg-stone-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingReport}
-                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  {submittingReport ? "Submitting…" : "Submit Report"}
-                </button>
-              </div>
-            </form>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-text-secondary">
+              Note to seller (optional)
+            </label>
+            <textarea
+              rows={3}
+              placeholder="e.g. Can meet near college library at 4 PM"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full p-2.5 text-sm bg-surface text-text rounded-sm border border-border focus:border-primary focus:outline-none placeholder:text-text-tertiary"
+            />
           </div>
-        </div>
-      )}
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setOfferModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="md" loading={submittingOffer}>
+              Submit offer
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Report Modal */}
+      <Modal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        title="Report listing"
+        description="Campus moderators review all reports within 24 hours."
+      >
+        <form onSubmit={handleReportSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-text-secondary">Reason</label>
+            <select
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              className="w-full h-11 px-3 text-sm bg-surface border border-border rounded-sm focus:border-primary focus:outline-none"
+            >
+              <option value="Counterfeit or Misleading">Counterfeit or misleading item</option>
+              <option value="Prohibited or Hazardous Item">Prohibited or hazardous item</option>
+              <option value="Scam or Fraudulent Offer">Suspected scam</option>
+              <option value="Inappropriate Content">Inappropriate content or photo</option>
+              <option value="Commercial Reseller">Commercial reseller / non-student</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-text-secondary">
+              Details (optional)
+            </label>
+            <textarea
+              rows={3}
+              placeholder="Provide context for moderation review"
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              className="w-full p-2.5 text-sm bg-surface text-text rounded-sm border border-border focus:border-primary focus:outline-none placeholder:text-text-tertiary"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setReportModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="destructive" size="md" loading={submittingReport}>
+              Submit report
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

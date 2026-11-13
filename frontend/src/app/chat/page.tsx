@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, User, getToken } from "@/lib/api";
+import EmptyState from "@/components/ui/EmptyState";
+import { MessageSquare, ChevronRight } from "lucide-react";
 
 type Conversation = {
   id: number;
@@ -48,23 +50,21 @@ export default function ChatListPage() {
 
         const convos: Conversation[] = await api("/chat/conversations");
 
-        // For each conversation, load the last message
         const displayed: ConversationDisplay[] = await Promise.all(
           convos.map(async (c) => {
             const otherId = c.user_a_id === user.id ? c.user_b_id : c.user_a_id;
 
-            // Try to fetch last message
             let lastMsg: LastMessage | null = null;
             try {
               const msgs = await api(`/chat/conversations/${c.id}/messages`);
               if (msgs.length > 0) {
                 lastMsg = msgs[msgs.length - 1];
               }
-            } catch {}
+            } catch { }
 
             return {
               ...c,
-              otherUser: { id: otherId, name: `User #${otherId}` },
+              otherUser: { id: otherId, name: `Student #${otherId}` },
               lastMessage: lastMsg,
             };
           })
@@ -78,83 +78,88 @@ export default function ChatListPage() {
       }
     }
     load();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center text-ink/60 animate-pulse text-sm">
-        Loading conversations…
+      <div className="mx-auto max-w-2xl py-12 text-center text-xs text-text-secondary">
+        Loading conversations...
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-2xl mx-auto py-8 text-center animate-fade-in">
-        <span className="text-5xl mb-4 block">💬</span>
-        <h1 className="text-xl font-bold text-ink mb-2">Messages</h1>
-        <p className="text-sm text-ink/60 mb-4">{error}</p>
-        <Link href="/login" className="text-sm text-moss font-semibold hover:underline">
-          Log in to continue →
+      <div className="mx-auto max-w-2xl py-12 text-center">
+        <MessageSquare className="mx-auto mb-3 h-8 w-8 text-text-tertiary" strokeWidth={1.5} />
+        <h1 className="text-base font-semibold text-text">Messages</h1>
+        <p className="mt-1 text-xs text-danger">{error}</p>
+        <Link href="/login" className="mt-4 inline-block text-xs font-medium text-primary hover:underline">
+          Log in to continue
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-4 animate-fade-in">
-      <div className="flex items-center justify-between mb-6">
+    <div className="mx-auto max-w-2xl py-4 sm:py-6">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-ink dark:text-white">Messages</h1>
-          <p className="text-sm text-ink/60 dark:text-stone-400">Chat with buyers and sellers</p>
+          <h1 className="text-xl font-semibold text-text">Messages</h1>
+          <p className="text-xs text-text-secondary">
+            Direct communication with campus buyers and sellers
+          </p>
         </div>
       </div>
 
       {conversations.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-6">
-          <span className="text-5xl mb-3 block">💬</span>
-          <h3 className="font-semibold text-ink dark:text-white text-base">No conversations yet</h3>
-          <p className="text-xs text-ink/60 dark:text-stone-400 mt-1 max-w-sm mx-auto">
-            Browse listings and message a seller to start a conversation!
-          </p>
-          <Link
-            href="/"
-            className="mt-4 inline-block text-xs font-semibold text-moss dark:text-emerald-400 underline hover:text-moss/80"
-          >
-            Browse Nearby Items →
-          </Link>
-        </div>
+        <EmptyState
+          icon={MessageSquare}
+          title="No conversations yet"
+          description="Browse campus listings and message a seller to start negotiating."
+          actionLabel="Browse nearby items"
+          actionHref="/"
+        />
       ) : (
-        <div className="space-y-2">
-          {conversations.map((c) => (
-            <Link
-              key={c.id}
-              href={`/chat/${c.id}`}
-              className="flex items-center gap-3.5 sm:gap-4 bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-xl p-3.5 sm:p-4 hover:shadow-md hover:border-moss/20 dark:hover:border-emerald-500/30 transition-all group"
-            >
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-moss/15 to-emerald-100 dark:from-emerald-950 dark:to-stone-800 flex items-center justify-center text-sm sm:text-base font-bold text-moss dark:text-emerald-300 border border-moss/10 dark:border-stone-700 shrink-0">
-                {c.otherUser.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5">
-                  <p className="text-sm font-semibold text-ink dark:text-white group-hover:text-moss dark:group-hover:text-emerald-400 transition-colors truncate">
-                    {c.otherUser.name}
-                  </p>
-                  <span className="text-[11px] text-ink/40 dark:text-stone-500 shrink-0 ml-2">
-                    {new Date(c.lastMessage?.created_at || c.created_at).toLocaleDateString()}
-                  </span>
+        <div className="divide-y divide-border rounded-lg border border-border bg-surface overflow-hidden">
+          {conversations.map((c) => {
+            const hasLastMsg = Boolean(c.lastMessage);
+            const isMe = c.lastMessage?.sender_id === currentUser?.id;
+            const dateStr = new Date(c.lastMessage?.created_at || c.created_at).toLocaleDateString(
+              "en-IN",
+              { month: "short", day: "numeric" }
+            );
+
+            return (
+              <Link
+                key={c.id}
+                href={`/chat/${c.id}`}
+                className="flex items-center gap-3.5 p-4 transition-colors hover:bg-surface-muted"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface-muted font-medium text-xs text-text">
+                  {c.otherUser.name.charAt(0).toUpperCase()}
                 </div>
-                <p className="text-xs text-ink/60 dark:text-stone-400 truncate">
-                  {c.lastMessage
-                    ? `${c.lastMessage.sender_id === currentUser?.id ? "You: " : ""}${c.lastMessage.content}`
-                    : "No messages yet — say hello!"}
-                </p>
-              </div>
-              <svg className="w-4 h-4 text-ink/30 dark:text-stone-500 group-hover:text-moss dark:group-hover:text-emerald-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
-          ))}
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="truncate text-xs font-semibold text-text">
+                      {c.otherUser.name}
+                    </span>
+                    <span className="font-mono text-[11px] tabular-nums text-text-tertiary shrink-0 ml-2">
+                      {dateStr}
+                    </span>
+                  </div>
+                  <p className="truncate text-xs text-text-secondary">
+                    {hasLastMsg
+                      ? `${isMe ? "You: " : ""}${c.lastMessage?.content}`
+                      : "No messages yet"}
+                  </p>
+                </div>
+
+                <ChevronRight className="h-4 w-4 shrink-0 text-text-tertiary" strokeWidth={1.75} />
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

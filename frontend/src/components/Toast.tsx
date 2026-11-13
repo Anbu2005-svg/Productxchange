@@ -7,6 +7,7 @@ import {
   useCallback,
   ReactNode,
 } from "react";
+import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 
 export type ToastType = "success" | "error" | "info";
 
@@ -14,7 +15,6 @@ interface Toast {
   id: number;
   message: string;
   type: ToastType;
-  exiting?: boolean;
 }
 
 interface ToastContextValue {
@@ -38,71 +38,52 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const id = ++_nextId;
     setToasts((prev) => [...prev.slice(-2), { id, message, type }]);
 
-    // Auto-dismiss after 4 seconds
     setTimeout(() => {
-      setToasts((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, exiting: true } : t))
-      );
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 300);
+      setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
   }, []);
 
   const dismiss = useCallback((id: number) => {
-    setToasts((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, exiting: true } : t))
-    );
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 300);
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
-
-  const typeConfig: Record<
-    ToastType,
-    { border: string; bg: string; icon: string }
-  > = {
-    success: {
-      border: "border-l-emerald-500",
-      bg: "bg-emerald-50",
-      icon: "✅",
-    },
-    error: {
-      border: "border-l-red-500",
-      bg: "bg-red-50",
-      icon: "❌",
-    },
-    info: {
-      border: "border-l-blue-500",
-      bg: "bg-blue-50",
-      icon: "ℹ️",
-    },
-  };
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
 
-      {/* Toast Container */}
-      <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+      <div
+        role="region"
+        aria-live="polite"
+        className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+      >
         {toasts.map((toast) => {
-          const cfg = typeConfig[toast.type];
           return (
             <div
               key={toast.id}
-              className={`pointer-events-auto flex items-start gap-3 max-w-sm px-4 py-3 rounded-xl border border-l-4 ${cfg.border} ${cfg.bg} shadow-lg ${
-                toast.exiting ? "animate-slide-out-right" : "animate-slide-in-right"
-              }`}
+              role="status"
+              className="pointer-events-auto flex items-start gap-3 w-80 max-w-[calc(100vw-32px)] p-3.5 rounded-md border border-border bg-surface shadow-overlay"
             >
-              <span className="text-base shrink-0 mt-0.5">{cfg.icon}</span>
-              <p className="text-sm text-ink font-medium flex-1 leading-snug">
+              <span className="shrink-0 mt-0.5">
+                {toast.type === "success" && (
+                  <CheckCircle2 className="w-4 h-4 text-success" />
+                )}
+                {toast.type === "error" && (
+                  <AlertCircle className="w-4 h-4 text-danger" />
+                )}
+                {toast.type === "info" && (
+                  <Info className="w-4 h-4 text-info" />
+                )}
+              </span>
+              <p className="text-xs text-text font-medium flex-1 leading-normal">
                 {toast.message}
               </p>
               <button
+                type="button"
                 onClick={() => dismiss(toast.id)}
-                className="text-ink/40 hover:text-ink text-xs font-bold shrink-0 mt-0.5"
+                aria-label="Dismiss message"
+                className="text-text-tertiary hover:text-text p-0.5 rounded-sm shrink-0"
               >
-                ✕
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           );

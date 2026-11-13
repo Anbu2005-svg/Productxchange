@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { api, getToken, User } from "@/lib/api";
+import { MapPin, Handshake, Plus, MessageSquare, User as UserIcon } from "lucide-react";
 
 export default function MobileBottomNav() {
   const pathname = usePathname();
@@ -27,13 +28,12 @@ export default function MobileBottomNav() {
       .catch(() => setUser(null));
   }, [pathname]);
 
-  // Hide mobile bottom nav inside active one-on-one chat to maximize keyboard and message space
+  // Hide mobile bottom nav inside active one-on-one chat to maximize keyboard space
   const isChatDetail = pathname.startsWith("/chat/") && pathname !== "/chat";
   if (isChatDetail) {
     return null;
   }
 
-  // Active check helper
   const isActive = (path: string) => {
     if (path === "/") {
       return pathname === "/";
@@ -44,103 +44,85 @@ export default function MobileBottomNav() {
   return (
     <nav
       aria-label="Mobile navigation bar"
-      className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#131a16]/95 backdrop-blur-xl border-t border-ink/8 dark:border-white/10 px-2 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] transition-colors shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
+      style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom, 8px))" }}
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-border px-2 pt-2 safe-area-bottom"
     >
       <div className="flex items-center justify-around max-w-md mx-auto">
         {/* 1. Explore */}
         <Link
           href="/"
-          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] rounded-xl transition-all active:scale-90 ${
+          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${
             isActive("/")
-              ? "text-emerald-700 dark:text-emerald-400 font-bold"
-              : "text-ink/60 dark:text-stone-400 hover:text-emerald-600 dark:hover:text-emerald-300"
+              ? "text-primary font-semibold"
+              : "text-text-secondary hover:text-text"
           }`}
         >
-          <div className="relative">
-            <span className="text-xl">📍</span>
-            {isActive("/") && (
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-            )}
-          </div>
-          <span className="text-[10px] tracking-tight mt-0.5">Explore</span>
+          <MapPin className="w-5 h-5" strokeWidth={1.75} />
+          <span className="text-[12px] mt-1">Explore</span>
         </Link>
 
         {/* 2. Deals */}
         <Link
           href={user ? "/deals" : "/login"}
-          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] rounded-xl transition-all active:scale-90 ${
+          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${
             isActive("/deals")
-              ? "text-emerald-700 dark:text-emerald-400 font-bold"
-              : "text-ink/60 dark:text-stone-400 hover:text-emerald-600 dark:hover:text-emerald-300"
+              ? "text-primary font-semibold"
+              : "text-text-secondary hover:text-text"
           }`}
         >
-          <div className="relative">
-            <span className="text-xl">🤝</span>
-            {isActive("/deals") && (
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-            )}
-          </div>
-          <span className="text-[10px] tracking-tight mt-0.5">Deals</span>
+          <Handshake className="w-5 h-5" strokeWidth={1.75} />
+          <span className="text-[12px] mt-1">Deals</span>
         </Link>
 
-        {/* 3. Sell (Floating Center Pill) */}
+        {/* 3. Sell (Small primary-filled rounded square, no glow, no floating) */}
         <Link
           href={user ? "/listings/new" : "/login"}
-          className="flex flex-col items-center justify-center -mt-4 group active:scale-95 transition-transform"
-          aria-label="Post new campus listing"
+          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${
+            isActive("/listings/new")
+              ? "text-primary font-semibold"
+              : "text-text-secondary hover:text-text"
+          }`}
+          aria-label="Create listing"
         >
-          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-600 via-emerald-500 to-teal-500 text-white flex items-center justify-center text-2xl font-bold shadow-lg shadow-emerald-600/30 ring-4 ring-white dark:ring-[#131a16] group-hover:scale-105 transition-all">
-            +
+          <div className="w-7 h-7 rounded-sm bg-primary text-primary-fg flex items-center justify-center">
+            <Plus className="w-4 h-4" strokeWidth={2} />
           </div>
-          <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 mt-1">
-            Sell
-          </span>
+          <span className="text-[12px] mt-1">Sell</span>
         </Link>
 
         {/* 4. Chat */}
         <Link
           href={user ? "/chat" : "/login"}
-          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] rounded-xl transition-all active:scale-90 relative ${
+          className={`relative flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${
             isActive("/chat")
-              ? "text-emerald-700 dark:text-emerald-400 font-bold"
-              : "text-ink/60 dark:text-stone-400 hover:text-emerald-600 dark:hover:text-emerald-300"
+              ? "text-primary font-semibold"
+              : "text-text-secondary hover:text-text"
           }`}
         >
           <div className="relative">
-            <span className="text-xl">💬</span>
-            {Boolean(unreadChatCount && unreadChatCount > 0) && (
-              <span className="absolute -top-1 -right-2 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-rose-500 text-white animate-pulse shadow-xs">
-                {unreadChatCount}
+            <MessageSquare className="w-5 h-5" strokeWidth={1.75} />
+            {unreadChatCount > 0 && (
+              <span className="absolute -top-1.5 -right-2 px-1.5 min-w-[16px] h-4 rounded-full bg-primary text-primary-fg text-[10px] font-semibold flex items-center justify-center leading-none">
+                {unreadChatCount > 99 ? "99+" : unreadChatCount}
               </span>
             )}
-            {isActive("/chat") && (
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-            )}
           </div>
-          <span className="text-[10px] tracking-tight mt-0.5">Chat</span>
+          <span className="text-[12px] mt-1">Chat</span>
         </Link>
 
-        {/* 5. Profile / Saved */}
+        {/* 5. Profile */}
         <Link
           href={user ? "/profile" : "/login"}
-          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] rounded-xl transition-all active:scale-90 ${
-            isActive("/profile") || isActive("/saved")
-              ? "text-emerald-700 dark:text-emerald-400 font-bold"
-              : "text-ink/60 dark:text-stone-400 hover:text-emerald-600 dark:hover:text-emerald-300"
+          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${
+            isActive("/profile")
+              ? "text-primary font-semibold"
+              : "text-text-secondary hover:text-text"
           }`}
         >
-          <div className="relative">
-            <span className="text-xl">{user ? "👤" : "🔑"}</span>
-            {(isActive("/profile") || isActive("/saved")) && (
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-            )}
-          </div>
-          <span className="text-[10px] tracking-tight mt-0.5">
-            {user ? "Profile" : "Log In"}
-          </span>
+          <UserIcon className="w-5 h-5" strokeWidth={1.75} />
+          <span className="text-[12px] mt-1">Profile</span>
         </Link>
       </div>
     </nav>
   );
 }
-

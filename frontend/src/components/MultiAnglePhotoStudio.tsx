@@ -2,6 +2,21 @@
 
 import { useState, useRef } from "react";
 import Product3DViewer from "@/components/Product3DViewer";
+import {
+  Camera,
+  Box,
+  Check,
+  X,
+  RotateCw,
+  ArrowRight,
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+  Layers,
+  Loader2,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 export interface AngleData {
   front?: File | null;
@@ -27,62 +42,72 @@ interface MultiAnglePhotoStudioProps {
   onError?: (err: string | null) => void;
 }
 
-const ANGLE_SLOTS = [
+interface AngleSlotConfig {
+  key: keyof AngleData;
+  label: string;
+  angleDeg: string;
+  desc: string;
+  instruction: string;
+  required: boolean;
+  IconComponent: typeof Box;
+}
+
+const ANGLE_SLOTS: AngleSlotConfig[] = [
   {
     key: "front",
-    label: "Front Face",
+    label: "Front face",
     angleDeg: "0°",
-    icon: "🏷️",
+    IconComponent: Camera,
     desc: "Main face / default cover photo",
     instruction: "Place item upright and photograph straight on.",
     required: true,
   },
   {
     key: "right",
-    label: "Right Profile",
+    label: "Right profile",
     angleDeg: "90°",
-    icon: "➡️",
+    IconComponent: ArrowRight,
     desc: "Right profile angle",
     instruction: "Rotate item 90° clockwise and capture right side.",
     required: true,
   },
   {
     key: "back",
-    label: "Back View",
+    label: "Back view",
     angleDeg: "180°",
-    icon: "🔄",
-    desc: "Rear panel / ports / labels",
+    IconComponent: RotateCw,
+    desc: "Rear panel / labels / ports",
     instruction: "Turn item completely around to capture the back.",
     required: true,
   },
   {
     key: "left",
-    label: "Left Profile",
+    label: "Left profile",
     angleDeg: "270°",
-    icon: "⬅️",
+    IconComponent: ArrowLeft,
     desc: "Left profile angle",
     instruction: "Rotate to capture the complete left profile.",
     required: true,
   },
   {
     key: "top",
-    label: "Top View",
+    label: "Top view",
     angleDeg: "Top",
-    icon: "⬆️",
-    desc: "Bird's eye perspective",
+    IconComponent: ArrowUp,
+    desc: "Top / bird's-eye perspective",
     instruction: "Photograph looking directly down at the item.",
     required: false,
   },
   {
     key: "bottom",
-    label: "Bottom View",
+    label: "Base view",
     angleDeg: "Base",
-    icon: "⬇️",
+    IconComponent: ArrowDown,
     desc: "Base / underside",
-    instruction: "Turn upside down to show the base, feet, or underside.",
+    instruction: "Turn upside down to show the base or underside.",
     required: false,
   },
-] as const;
+];
 
 export default function MultiAnglePhotoStudio({
   initialPreviews = {},
@@ -139,26 +164,25 @@ export default function MultiAnglePhotoStudio({
 
   async function handleConvertTo3D() {
     if (!anglePreviews.front) {
-      if (onError) onError("Please upload at least the Front View to generate a 3D model.");
+      if (onError) onError("Please upload at least the front view to generate a 3D model.");
       return;
     }
 
     if (uploadedCount < 2) {
-      if (onError) onError("Please upload at least 2 sides (ideally all 6 angles) to convert into an interactive 3D model.");
+      if (onError) onError("Please upload at least 2 sides (ideally all 6 angles) to generate a 3D model.");
       return;
     }
 
     setConverting(true);
     if (onError) onError(null);
 
-    // Multi-stage photogrammetric synthesis simulation
-    setConversionStage("Calibrating angle coordinates & focal length...");
+    setConversionStage("Calibrating angle coordinates and focal length...");
     await new Promise((r) => setTimeout(r, 450));
     setConversionStage("Extracting perspective feature mesh...");
     await new Promise((r) => setTimeout(r, 450));
-    setConversionStage("Stitching 360° turntable depth frames...");
+    setConversionStage("Stitching 360-degree turntable depth frames...");
     await new Promise((r) => setTimeout(r, 400));
-    setConversionStage("Finalizing interactive 3D model!");
+    setConversionStage("Finalizing interactive 3D model...");
     await new Promise((r) => setTimeout(r, 300));
 
     setIs3DReady(true);
@@ -169,35 +193,36 @@ export default function MultiAnglePhotoStudio({
   }
 
   return (
-    <div className="space-y-5 rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-950/10 via-emerald-900/5 to-transparent dark:from-emerald-950/30 dark:via-stone-900 dark:to-stone-900 p-5 sm:p-6 shadow-sm">
-      {/* Studio Banner & Instructions */}
-      <div className="rounded-xl bg-gradient-to-r from-emerald-600/15 via-teal-600/10 to-indigo-600/15 border border-emerald-500/30 p-4">
+    <div className="space-y-4 rounded-lg border border-border bg-surface p-4 sm:p-5">
+      {/* Header and Instruction bar */}
+      <div className="rounded-md border border-border bg-surface-muted p-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-xl shrink-0 shadow-md">
-            🧊
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-subtle text-primary">
+            <Layers className="h-5 w-5" strokeWidth={1.75} />
           </div>
           <div className="flex-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-extrabold text-base text-ink dark:text-white flex items-center gap-2">
-                <span>3D Photogrammetry Studio</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 uppercase tracking-wide">
-                  Verified 3D
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-text">
+                  Multi-angle photo capture
+                </h3>
+                <span className="rounded-full bg-primary-subtle px-2 py-0.5 text-xs font-medium text-primary">
+                  3D inspection
                 </span>
-              </h3>
-              <span className="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-white/70 dark:bg-stone-800 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                {uploadedCount} of 6 Angles Uploaded ({progressPct}%)
+              </div>
+              <span className="font-mono text-xs tabular-nums text-text-secondary">
+                {uploadedCount} of 6 angles ({progressPct}%)
               </span>
             </div>
 
-            <p className="text-xs text-ink/80 dark:text-stone-300 mt-1 leading-relaxed">
-              <strong>Instructions:</strong> Please upload a photo of <strong>every side of your item</strong> (Front, Right, Back, Left, Top, and Bottom). Once uploaded, click <strong>&quot;Convert to 3D Image&quot;</strong> to generate an interactive 360° turntable that buyers can rotate and inspect!
+            <p className="mt-1 text-xs leading-relaxed text-text-secondary">
+              Upload photos of each side (front, right, back, left, top, base). When at least 2 sides are uploaded, you can generate a 360-degree interactive viewer for prospective buyers.
             </p>
 
-            {/* Stepper Progress Bar */}
-            <div className="mt-3 w-full bg-sand/60 dark:bg-stone-800 rounded-full h-2 overflow-hidden border border-emerald-500/20">
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-border">
               <div
                 style={{ width: `${progressPct}%` }}
-                className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500 rounded-full"
+                className="h-full bg-primary transition-all duration-300"
               />
             </div>
           </div>
@@ -205,23 +230,21 @@ export default function MultiAnglePhotoStudio({
       </div>
 
       {/* 6-Angle Capture Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {ANGLE_SLOTS.map((slot, index) => {
           const preview = anglePreviews[slot.key];
           const hasImage = Boolean(preview);
+          const Icon = slot.IconComponent;
 
           return (
             <div
               key={slot.key}
-              className={`relative rounded-xl border-2 transition-all duration-200 overflow-hidden flex flex-col justify-between group ${
+              className={`group relative flex flex-col justify-between overflow-hidden rounded-md border text-left transition-colors duration-150 ${
                 hasImage
-                  ? "border-emerald-500 bg-white dark:bg-stone-900 shadow-md ring-1 ring-emerald-500/30"
-                  : slot.required
-                  ? "border-emerald-500/40 bg-sand/40 dark:bg-stone-900/60 hover:border-emerald-500 hover:shadow-sm"
-                  : "border-dashed border-ink/20 dark:border-stone-700 bg-sand/20 dark:bg-stone-900/30 hover:border-emerald-500/50"
+                  ? "border-primary bg-surface"
+                  : "border-border bg-surface-muted hover:border-border-strong"
               }`}
             >
-              {/* Hidden file input for this angle */}
               <input
                 ref={(el) => {
                   fileInputRefs.current[slot.key] = el;
@@ -235,12 +258,10 @@ export default function MultiAnglePhotoStudio({
                 }}
               />
 
-              {/* Angle Header Badge */}
-              <div className="flex items-center justify-between px-2 py-1.5 bg-sand/60 dark:bg-stone-800/80 border-b border-ink/5 dark:border-stone-700 text-[10px]">
-                <span className="font-bold text-ink/70 dark:text-stone-300">
-                  Step {index + 1}
-                </span>
-                <span className="px-1.5 py-0.2 rounded font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10">
+              {/* Slot Header */}
+              <div className="flex items-center justify-between border-b border-border px-2.5 py-1.5 text-xs">
+                <span className="text-text-tertiary">Step {index + 1}</span>
+                <span className="font-mono text-xs font-medium tabular-nums text-text-secondary">
                   {slot.angleDeg}
                 </span>
               </div>
@@ -248,61 +269,59 @@ export default function MultiAnglePhotoStudio({
               {/* Slot Body */}
               {hasImage ? (
                 <div
-                  className="relative aspect-square w-full cursor-pointer"
+                  className="relative aspect-square w-full cursor-pointer bg-surface-muted"
                   onClick={() => fileInputRefs.current[slot.key]?.click()}
                 >
                   <img
                     src={preview}
                     alt={slot.label}
-                    className="w-full h-full object-cover"
+                    className="h-full w-full object-cover"
                   />
-                  {/* Remove Button for Touch & Desktop */}
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleRemoveSide(slot.key);
                     }}
-                    className="absolute top-1.5 left-1.5 z-10 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center shadow-md hover:bg-rose-700 transition-colors"
-                    title="Remove Photo"
+                    className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-surface text-danger shadow-xs hover:bg-danger-subtle focus:outline-hidden"
+                    title="Remove photo"
+                    aria-label={`Remove ${slot.label}`}
                   >
-                    ✕
+                    <X className="h-3.5 w-3.5" strokeWidth={2} />
                   </button>
 
-                  {/* Hover / Tap Actions */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-2 backdrop-blur-[2px]">
-                    <span className="text-[10px] font-bold bg-white text-ink px-2.5 py-1 rounded shadow">
-                      Tap to Change
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                    <span className="rounded-md bg-surface px-2 py-1 text-xs font-medium text-text shadow-xs">
+                      Change photo
                     </span>
                   </div>
-                  <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-emerald-500 text-white text-[11px] font-bold flex items-center justify-center shadow-md ring-2 ring-white dark:ring-stone-900">
-                    ✓
+
+                  <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-on-primary">
+                    <Check className="h-3 w-3" strokeWidth={2.5} />
                   </span>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={() => fileInputRefs.current[slot.key]?.click()}
-                  className="aspect-square w-full flex flex-col items-center justify-center p-2.5 text-center hover:bg-emerald-500/10 transition-colors"
+                  className="flex aspect-square w-full flex-col items-center justify-center p-3 text-center transition-colors hover:bg-surface focus:outline-hidden"
                 >
-                  <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">
-                    {slot.icon}
-                  </span>
-                  <span className="text-xs font-bold text-ink dark:text-white">
+                  <Icon className="mb-1.5 h-5 w-5 text-text-tertiary group-hover:text-primary" strokeWidth={1.75} />
+                  <span className="text-xs font-medium text-text">
                     {slot.label}
                   </span>
-                  <span className="text-[10px] text-ink/50 dark:text-stone-400 mt-0.5">
+                  <span className="mt-0.5 text-xs text-text-tertiary">
                     {slot.required ? "Required" : "Optional"}
                   </span>
-                  <span className="text-[9px] text-emerald-700 dark:text-emerald-400 mt-1 font-semibold">
-                    + Take Photo
+                  <span className="mt-1.5 text-xs font-medium text-primary">
+                    Upload
                   </span>
                 </button>
               )}
 
               {/* Slot Footer Guidance */}
-              <div className="p-1.5 text-center bg-sand/30 dark:bg-stone-800/40 border-t border-ink/5 dark:border-stone-800">
-                <p className="text-[9px] text-ink/60 dark:text-stone-400 line-clamp-1" title={slot.instruction}>
+              <div className="border-t border-border px-2 py-1.5 text-center">
+                <p className="truncate text-xs text-text-tertiary" title={slot.instruction}>
                   {slot.instruction}
                 </p>
               </div>
@@ -312,20 +331,22 @@ export default function MultiAnglePhotoStudio({
       </div>
 
       {/* Convert to 3D Action Banner */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl bg-white/80 dark:bg-stone-900/80 border border-emerald-500/30 shadow-sm">
+      <div className="flex flex-col items-start justify-between gap-3 rounded-md border border-border bg-surface-muted p-3.5 sm:flex-row sm:items-center">
         <div>
-          <h4 className="text-sm font-bold text-ink dark:text-white flex items-center gap-1.5">
-            <span>✨ 3D Model Generator</span>
+          <div className="flex items-center gap-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-text">
+              3D interactive model
+            </h4>
             {is3DReady && (
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                (Model Calibrated)
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                <Check className="h-3.5 w-3.5" strokeWidth={2} /> Ready
               </span>
             )}
-          </h4>
-          <p className="text-xs text-ink/70 dark:text-stone-300 mt-0.5">
+          </div>
+          <p className="mt-0.5 text-xs text-text-secondary">
             {uploadedCount >= 2
-              ? `Ready to synthesize your ${uploadedCount} side photos into an interactive 3D viewer.`
-              : "Upload at least 2 sides (Front + Right or Back) to generate an interactive 3D model."}
+              ? `Synthesize ${uploadedCount} photos into an interactive 360-degree turntable.`
+              : "Upload at least 2 sides (front and another view) to generate a 3D model."}
           </p>
         </div>
 
@@ -333,24 +354,26 @@ export default function MultiAnglePhotoStudio({
           type="button"
           disabled={uploadedCount < 2 || converting}
           onClick={handleConvertTo3D}
-          className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 shadow-md ${
+          className={`inline-flex h-9 items-center justify-center gap-2 rounded-md px-4 text-xs font-medium transition-colors ${
             uploadedCount >= 2 && !converting
-              ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white hover:opacity-95 hover:scale-[1.02] active:scale-95"
-              : "bg-stone-300 dark:bg-stone-800 text-stone-500 cursor-not-allowed"
+              ? "bg-primary text-on-primary hover:bg-primary-hover active:bg-primary-hover"
+              : "cursor-not-allowed bg-surface-muted text-text-tertiary border border-border"
           }`}
         >
           {converting ? (
             <>
-              <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-              <span>{conversionStage || "Converting to 3D…"}</span>
+              <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+              <span>{conversionStage || "Generating..."}</span>
             </>
           ) : is3DReady ? (
             <>
-              <span>🧊</span> Re-generate 3D Model
+              <RotateCw className="h-4 w-4" strokeWidth={1.75} />
+              <span>Regenerate 3D model</span>
             </>
           ) : (
             <>
-              <span>✨</span> Convert Images into 3D
+              <Box className="h-4 w-4" strokeWidth={1.75} />
+              <span>Generate 3D model</span>
             </>
           )}
         </button>
@@ -358,25 +381,33 @@ export default function MultiAnglePhotoStudio({
 
       {/* Interactive 3D Model Live Inspector */}
       {is3DReady && (
-        <div className="pt-2 animate-fade-in">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-              <span>🎉</span> Interactive 3D Model Preview
+        <div className="pt-2">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+              Interactive 3D model preview
             </span>
             <button
               type="button"
               onClick={() => setShowLivePreview(!showLivePreview)}
-              className="text-xs font-bold text-moss dark:text-emerald-400 hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             >
-              {showLivePreview ? "Hide 3D Viewer ▲" : "Show 3D Viewer ▼"}
+              {showLivePreview ? (
+                <>
+                  <EyeOff className="h-3.5 w-3.5" strokeWidth={1.75} /> Hide preview
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3.5 w-3.5" strokeWidth={1.75} /> Show preview
+                </>
+              )}
             </button>
           </div>
 
           {showLivePreview && (
-            <div className="rounded-2xl overflow-hidden border border-emerald-500/40 shadow-lg">
+            <div className="overflow-hidden rounded-md border border-border">
               <Product3DViewer
                 angles={anglePreviews as Record<string, string>}
-                title="Product 3D Model Preview"
+                title="Product 3D preview"
               />
             </div>
           )}

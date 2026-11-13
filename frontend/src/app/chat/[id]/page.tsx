@@ -3,7 +3,14 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, User, getToken, API_BASE } from "@/lib/api";
+import { api, User, getToken, API_BASE, Product, resolveImageUrl } from "@/lib/api";
+import {
+  ArrowLeft,
+  Send,
+  Loader2,
+  Package,
+  ExternalLink,
+} from "lucide-react";
 
 type Message = {
   id: number;
@@ -29,6 +36,7 @@ export default function ChatThreadPage() {
   const { id: conversationId } = useParams<{ id: string }>();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [convo, setConvo] = useState<ConversationInfo | null>(null);
+  const [product, setProduct] = useState<Product | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -36,6 +44,7 @@ export default function ChatThreadPage() {
   const [error, setError] = useState<string | null>(null);
   const [isWsConnected, setIsWsConnected] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentRef = useRef<number>(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -50,7 +59,7 @@ export default function ChatThreadPage() {
     try {
       const msgs = await api(`/chat/conversations/${conversationId}/messages`);
       setMessages(msgs);
-    } catch {}
+    } catch { }
   }, [conversationId]);
 
   useEffect(() => {
@@ -65,9 +74,14 @@ export default function ChatThreadPage() {
         const user = await api("/auth/me");
         setCurrentUser(user);
 
-        // Get conversation info with user details
-        const thisConvo = await api(`/chat/conversations/${conversationId}`).catch(() => null);
+        const thisConvo: ConversationInfo = await api(`/chat/conversations/${conversationId}`).catch(() => null);
         setConvo(thisConvo || null);
+
+        if (thisConvo?.product_id) {
+          api(`/products/${thisConvo.product_id}`)
+            .then((p) => setProduct(p))
+            .catch(() => { });
+        }
 
         await fetchMessages();
       } catch (e: any) {
@@ -78,7 +92,6 @@ export default function ChatThreadPage() {
     }
     load();
 
-    // Connect to WebSocket for instant real-time messaging
     let ws: WebSocket | null = null;
     let reconnectTimer: any = null;
 
@@ -101,7 +114,6 @@ export default function ChatThreadPage() {
           try {
             const data = JSON.parse(event.data);
 
-            // Handle typing indicator
             if (data.type === "typing") {
               if (currentUser && data.sender_id !== currentUser.id) {
                 setIsOtherTyping(data.is_typing);
@@ -119,7 +131,7 @@ export default function ChatThreadPage() {
                 return [...prev, data];
               });
             }
-          } catch {}
+          } catch { }
         };
 
         ws.onclose = () => {
@@ -137,7 +149,6 @@ export default function ChatThreadPage() {
 
     connectWs();
 
-    // Adaptive fallback polling: only poll when tab is visible and WebSocket is disconnected
     pollRef.current = setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
@@ -164,7 +175,7 @@ export default function ChatThreadPage() {
         ws.close();
       }
     };
-  }, [conversationId, fetchMessages]);
+  }, [conversationId, fetchMessages, router]);
 
   useEffect(() => {
     scrollToBottom();
@@ -197,18 +208,18 @@ export default function ChatThreadPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center text-ink/60 animate-pulse text-sm">
-        Loading conversation…
+      <div className="mx-auto max-w-2xl py-16 text-center text-xs text-text-secondary">
+        Loading conversation...
       </div>
     );
   }
 
   if (error && messages.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto py-8 text-center animate-fade-in">
-        <p className="text-sm text-clay">{error}</p>
-        <Link href="/chat" className="text-sm text-moss font-semibold hover:underline mt-2 inline-block">
-          ← Back to conversations
+      <div className="mx-auto max-w-2xl py-12 text-center">
+        <p className="text-xs text-danger">{error}</p>
+        <Link href="/chat" className="mt-3 inline-block text-xs font-medium text-primary hover:underline">
+          Return to messages
         </Link>
       </div>
     );
@@ -220,55 +231,90 @@ export default function ChatThreadPage() {
       : convo.user_a_id
     : null;
 
+  const otherUserName = convo?.other_user_name || (otherUserId ? `Student #${otherUserId}` : "Chat");
+
   return (
-    <div className="max-w-2xl mx-auto py-2 sm:py-4 px-1 sm:px-4 animate-fade-in flex flex-col h-[calc(100dvh-130px)] sm:h-[calc(100vh-190px)]">
-      {/* Chat Header */}
-      <div className="flex items-center gap-3 pb-3 sm:pb-4 border-b border-ink/10 dark:border-stone-800 mb-3">
-        <Link href="/chat" className="text-ink/60 dark:text-stone-400 hover:text-moss dark:hover:text-emerald-400 transition-colors p-1">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
+    <div className="mx-auto flex h-[calc(100dvh-72px)] max-w-2xl flex-col py-2">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-border bg-surface px-3 py-2.5 sm:px-4">
+        <Link
+          href="/chat"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-muted hover:text-text"
+          aria-label="Back to conversations"
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
         </Link>
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-moss/15 to-emerald-100 dark:from-emerald-950 dark:to-stone-800 flex items-center justify-center text-sm font-bold text-moss dark:text-emerald-300 border border-moss/10 dark:border-stone-700 shrink-0">
-          {convo?.other_user_name ? convo.other_user_name.charAt(0).toUpperCase() : "U"}
+
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface-muted text-xs font-medium text-text">
+          {otherUserName.charAt(0).toUpperCase()}
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-ink dark:text-white truncate">
-            {otherUserId ? (
-              <Link href={`/profile/${otherUserId}`} className="hover:text-moss dark:hover:text-emerald-400 transition-colors">
-                {convo?.other_user_name || `User #${otherUserId}`}
-              </Link>
-            ) : (
-              "Chat"
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-xs font-semibold text-text">
+              {otherUserName}
+            </span>
+            {convo?.other_user_college && (
+              <span className="hidden truncate text-[11px] text-text-tertiary sm:inline">
+                • {convo.other_user_college}
+              </span>
             )}
-          </p>
-          {convo?.other_user_college && (
-            <p className="text-[11px] text-ink/50 dark:text-stone-400 truncate">
-              {convo.other_user_college}
-            </p>
-          )}
-          {convo?.product_id && (
-            <Link href={`/listings/${convo.product_id}`} className="text-[11px] text-moss dark:text-emerald-400 hover:underline block">
-              View listing →
-            </Link>
-          )}
+          </div>
         </div>
-        <div className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full font-medium shrink-0 ${
-          isWsConnected
-            ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-            : "text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
-        }`}>
-          <span className={`w-2 h-2 rounded-full ${isWsConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
-          {isWsConnected ? "Live Socket" : "Polling"}
+
+        <div className="flex items-center gap-1.5 text-[11px] text-text-tertiary">
+          <span
+            className={`h-2 w-2 rounded-full ${isWsConnected ? "bg-success" : "bg-warning"
+              }`}
+          />
+          <span className="hidden sm:inline">
+            {isWsConnected ? "Live" : "Connecting"}
+          </span>
         </div>
       </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto space-y-3 mb-3 px-1 scrollbar-none">
+      {/* Pinned Deal Summary Strip */}
+      {product && (
+        <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-muted px-4 py-2 text-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-surface">
+              {product.image_urls?.[0] ? (
+                <img
+                  src={resolveImageUrl(product.image_urls[0])}
+                  alt={product.title}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Package className="h-4 w-4 text-text-tertiary" strokeWidth={1.5} />
+              )}
+            </div>
+            <div className="min-w-0">
+              <span className="truncate block font-medium text-text">
+                {product.title}
+              </span>
+              <span className="font-mono tabular-nums text-text-secondary text-[11px]">
+                {product.price != null
+                  ? `₹${new Intl.NumberFormat("en-IN").format(product.price)}`
+                  : "Free"}
+              </span>
+            </div>
+          </div>
+
+          <Link
+            href={`/listings/${product.id}`}
+            className="inline-flex items-center gap-1 font-medium text-primary hover:underline shrink-0"
+          >
+            <span>View listing</span>
+            <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
+          </Link>
+        </div>
+      )}
+
+      {/* Messages Thread */}
+      <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 space-y-3">
         {messages.length === 0 && (
-          <div className="text-center py-12 text-ink/50 dark:text-stone-400 text-sm">
-            <span className="text-3xl block mb-2">👋</span>
-            Start the conversation — say hello!
+          <div className="py-12 text-center text-xs text-text-tertiary">
+            No messages yet. Send a message to start negotiating.
           </div>
         )}
 
@@ -281,24 +327,21 @@ export default function ChatThreadPage() {
           return (
             <div key={msg.id}>
               {showTime && (
-                <div className="text-center my-3">
-                  <span className="text-[11px] text-ink/50 dark:text-stone-400 bg-sand/80 dark:bg-stone-800 px-3 py-1 rounded-full border border-ink/5 dark:border-stone-700">
+                <div className="my-3 text-center">
+                  <span className="font-mono text-[11px] tabular-nums text-text-tertiary">
                     {new Date(msg.created_at).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
-                    {" · "}
-                    {new Date(msg.created_at).toLocaleDateString()}
                   </span>
                 </div>
               )}
               <div className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-2xl text-sm leading-relaxed ${
-                    isMe
-                      ? "bg-moss text-white rounded-br-md shadow-2xs"
-                      : "bg-white dark:bg-stone-800 border border-ink/10 dark:border-stone-700 text-ink dark:text-white rounded-bl-md shadow-2xs"
-                  }`}
+                  className={`max-w-[85%] sm:max-w-[70%] rounded-md px-3.5 py-2 text-sm leading-relaxed ${isMe
+                      ? "bg-primary-subtle text-text border border-primary/20"
+                      : "bg-surface-muted text-text border border-border"
+                    }`}
                 >
                   {msg.content}
                 </div>
@@ -311,24 +354,20 @@ export default function ChatThreadPage() {
 
       {/* Typing Indicator */}
       {isOtherTyping && (
-        <div className="px-3 py-1.5 text-xs text-ink/60 dark:text-stone-400 italic flex items-center gap-2 animate-fade-in">
-          <span className="inline-flex gap-1 items-center">
-            <span className="w-1.5 h-1.5 rounded-full bg-moss dark:bg-emerald-400 animate-bounce"></span>
-            <span className="w-1.5 h-1.5 rounded-full bg-moss dark:bg-emerald-400 animate-bounce [animation-delay:0.2s]"></span>
-            <span className="w-1.5 h-1.5 rounded-full bg-moss dark:bg-emerald-400 animate-bounce [animation-delay:0.4s]"></span>
-          </span>
-          <span>Student is typing…</span>
+        <div className="px-4 py-1 text-xs italic text-text-tertiary">
+          {otherUserName} is typing...
         </div>
       )}
 
-      {/* Message Input */}
+      {/* Fixed Composer */}
       <form
         onSubmit={handleSend}
-        className="flex items-center gap-2 border-t border-ink/10 dark:border-stone-800 pt-4"
+        className="flex items-center gap-2 border-t border-border bg-surface p-3"
       >
         <input
-          className="flex-1 border border-ink/15 dark:border-stone-700 rounded-xl px-4 py-3 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-          placeholder="Type a message…"
+          type="text"
+          className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-base text-text placeholder:text-text-tertiary focus:border-primary focus:outline-hidden"
+          placeholder="Write a message..."
           value={newMessage}
           onChange={(e) => {
             setNewMessage(e.target.value);
@@ -340,25 +379,17 @@ export default function ChatThreadPage() {
               }
             }
           }}
-          autoFocus
         />
         <button
           type="submit"
           disabled={!newMessage.trim() || sending}
-          className="bg-moss text-white rounded-xl px-5 py-3 text-sm font-semibold hover:bg-moss/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 flex items-center gap-1.5 shadow-sm"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary text-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-tertiary"
+          aria-label="Send message"
         >
           {sending ? (
-            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
           ) : (
-            <>
-              Send
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </>
+            <Send className="h-4 w-4" strokeWidth={1.75} />
           )}
         </button>
       </form>

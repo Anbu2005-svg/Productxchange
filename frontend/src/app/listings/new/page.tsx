@@ -3,11 +3,41 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, uploadProductImage, uploadProductImageWithAngle, convertProductTo3D, suggestListingAI, compressImage, getToken } from "@/lib/api";
-import MultiAnglePhotoStudio, { AngleData, AnglePreviews } from "@/components/MultiAnglePhotoStudio";
+import {
+  api,
+  uploadProductImage,
+  uploadProductImageWithAngle,
+  convertProductTo3D,
+  suggestListingAI,
+  compressImage,
+  getToken,
+} from "@/lib/api";
+import MultiAnglePhotoStudio, {
+  AngleData,
+  AnglePreviews,
+} from "@/components/MultiAnglePhotoStudio";
 import { useToast } from "@/components/Toast";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
+import { TypeTag } from "@/components/ui/Badge";
+import {
+  Camera,
+  Layers,
+  ArrowRight,
+  ArrowLeft,
+  Check,
+  Upload,
+  X,
+  Sparkles,
+  MapPin,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  Tag,
+} from "lucide-react";
 
-const TRANSACTION_TYPES = ["BUY", "EXCHANGE", "RENT", "DONATE"];
+const TRANSACTION_TYPES = ["BUY", "EXCHANGE", "RENT", "DONATE"] as const;
 const CATEGORIES = [
   "Textbooks & Study Material",
   "Electronics & Gadgets",
@@ -17,11 +47,25 @@ const CATEGORIES = [
   "Sports & Fitness",
   "Other",
 ];
+const CONDITIONS = ["Brand New", "Like New", "Good", "Fair"];
+
+const STEPS = [
+  { id: 1, label: "Photos" },
+  { id: 2, label: "Details" },
+  { id: 3, label: "Price & type" },
+  { id: 4, label: "Location" },
+  { id: 5, label: "Review" },
+];
+
+const DRAFT_KEY = "px_new_listing_draft_v2";
 
 export default function NewListingPage() {
   const router = useRouter();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [step, setStep] = useState(1);
+  const [createdProduct, setCreatedProduct] = useState<{ id: number; title: string } | null>(null);
 
   useEffect(() => {
     if (!getToken()) {
@@ -45,12 +89,38 @@ export default function NewListingPage() {
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
 
   // 3D Multi-Angle Studio state
   const [use3DStudio, setUse3DStudio] = useState(true);
   const [angleFiles, setAngleFiles] = useState<AngleData>({});
   const [anglePreviews, setAnglePreviews] = useState<AnglePreviews>({});
   const [is3DReady, setIs3DReady] = useState(false);
+
+  // Restore draft from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.form) {
+          setForm((prev) => ({ ...prev, ...parsed.form }));
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Autosave draft on form changes
+  useEffect(() => {
+    try {
+      const timer = setTimeout(() => {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ form }));
+        const now = new Date();
+        setLastSaved(now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      }, 600);
+      return () => clearTimeout(timer);
+    } catch {}
+  }, [form]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -101,7 +171,7 @@ export default function NewListingPage() {
   async function handleAiAnalyze() {
     const targetPhoto = angleFiles.front || selectedFiles[0];
     if (!targetPhoto) {
-      setError("Please choose or upload a product photo (e.g. Front View in 3D Studio) first to use AI Auto-Fill.");
+      setError("Please choose or upload a product photo first to use assisted fill.");
       return;
     }
 
@@ -120,12 +190,12 @@ export default function NewListingPage() {
           category: res.attributes?.category || prev.category,
           condition: res.attributes?.condition ? capitalize(res.attributes.condition) : prev.condition,
         }));
-        setAiNotice("✨ AI analyzed your photo and auto-filled title, description, and suggested pricing! Review or edit before publishing.");
+        setAiNotice("Suggested title, description and category generated from your photo. You can edit them in the next steps.");
       } else {
-        setAiNotice("AI Vision service returned without suggestions. Please fill the details manually.");
+        setAiNotice("No automatic suggestions found. Please fill in the details manually.");
       }
     } catch (e: any) {
-      setError(e.message || "Failed to analyze image with AI.");
+      setError(e.message || "Failed to analyze image.");
     } finally {
       setAnalyzingAI(false);
     }
@@ -133,6 +203,56 @@ export default function NewListingPage() {
 
   function capitalize(str: string) {
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  }
+
+  function validateStep(targetStep: number): boolean {
+    setError(null);
+    if (targetStep === 1) {
+      const hasAnyPhoto = Boolean(anglePreviews.front || selectedFiles.length > 0);
+      if (!hasAnyPhoto) {
+        setError("Please upload at least one photo (front view or cover photo) before proceeding.");
+        return false;
+      }
+    }
+    if (targetStep === 2) {
+      if (!form.title.trim()) {
+        setError("Please enter a title for your item.");
+        return false;
+      }
+      if (form.description && form.description.length > 2000) {
+        setError("Description must be under 2000 characters.");
+        return false;
+      }
+    }
+    if (targetStep === 3) {
+      if (form.transaction_type === "BUY" && (!form.price || Number(form.price) <= 0)) {
+        setError("Please enter a price for items you wish to sell.");
+        return false;
+      }
+      if (form.price) {
+        const p = Number(form.price);
+        if (isNaN(p) || p < 0) {
+          setError("Price must be a valid positive number.");
+          return false;
+        }
+        if (p > 1000000) {
+          setError("Price cannot exceed ₹10,00,000.");
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function handleNext() {
+    if (validateStep(step)) {
+      setStep((s) => Math.min(s + 1, 5));
+    }
+  }
+
+  function handleBack() {
+    setError(null);
+    setStep((s) => Math.max(s - 1, 1));
   }
 
   async function createWithCoords(lat: number, lng: number) {
@@ -175,45 +295,22 @@ export default function NewListingPage() {
       }
     }
 
-    showToast("Listing created successfully! 🎉", "success");
-    router.push(`/listings/${product.id}`);
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {}
+
+    setCreatedProduct({ id: product.id, title: product.title || form.title });
+    showToast("Listing created successfully", "success");
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    const hasAnyPhoto = Boolean(anglePreviews.front || selectedFiles.length > 0);
-    if (!hasAnyPhoto) {
-      setError("Please upload at least one photo (e.g. Front View in 3D Studio) for your item.");
-      return;
-    }
-
-    if (!form.title.trim()) {
-      setError("Please enter a title for your item.");
-      return;
-    }
-    if (form.transaction_type === "BUY" && (!form.price || Number(form.price) <= 0)) {
-      setError("Please set a price for items you wish to sell.");
-      return;
-    }
-    if (form.price) {
-      const price = Number(form.price);
-      if (isNaN(price) || price < 0) {
-        setError("Price must be a valid positive number.");
-        return;
-      }
-      if (price > 1000000) {
-        setError("Price seems unreasonable. Please enter a realistic price.");
-        return;
-      }
-    }
-    if (form.description && form.description.length > 2000) {
-      setError("Description must be under 2000 characters.");
+  async function handleSubmit(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!validateStep(1) || !validateStep(2) || !validateStep(3)) {
       return;
     }
 
     setSubmitting(true);
+    setError(null);
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -221,7 +318,7 @@ export default function NewListingPage() {
           try {
             await createWithCoords(pos.coords.latitude, pos.coords.longitude);
           } catch (err: any) {
-            setError(err.message);
+            setError(err.message || "Failed to create listing");
             setSubmitting(false);
           }
         },
@@ -229,7 +326,7 @@ export default function NewListingPage() {
           try {
             await createWithCoords(12.9716, 77.5946);
           } catch (err: any) {
-            setError(err.message);
+            setError(err.message || "Failed to create listing");
             setSubmitting(false);
           }
         }
@@ -238,311 +335,547 @@ export default function NewListingPage() {
       try {
         await createWithCoords(12.9716, 77.5946);
       } catch (err: any) {
-        setError(err.message);
+        setError(err.message || "Failed to create listing");
         setSubmitting(false);
       }
     }
   }
 
-  return (
-    <div className="max-w-2xl mx-auto py-3 sm:py-4 px-1 sm:px-4 animate-fade-in">
-      <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-ink dark:text-white">List an Item</h1>
-          <p className="text-xs sm:text-sm text-ink/70 dark:text-stone-300">Share books, electronics, or campus essentials with fellow students</p>
+  // Success view
+  if (createdProduct) {
+    return (
+      <div className="mx-auto max-w-xl py-12">
+        <div className="rounded-lg border border-border bg-surface p-6 text-center sm:p-8">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-success-subtle text-success">
+            <CheckCircle2 className="h-6 w-6" strokeWidth={2} />
+          </div>
+          <h1 className="text-xl font-semibold text-text">Listing published</h1>
+          <p className="mt-2 text-sm text-text-secondary">
+            Your item <span className="font-medium text-text">{createdProduct.title}</span> is now live in the campus feed.
+          </p>
+
+          <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
+            <Link href={`/listings/${createdProduct.id}`}>
+              <Button variant="primary">View listing</Button>
+            </Link>
+            <Link href="/">
+              <Button variant="secondary">Browse campus feed</Button>
+            </Link>
+          </div>
         </div>
-        <Link href="/" className="text-sm text-moss dark:text-emerald-400 font-medium hover:underline shrink-0">
-          Cancel
-        </Link>
       </div>
+    );
+  }
 
-      <form onSubmit={handleSubmit} className="bg-white dark:bg-stone-900 border border-ink/10 dark:border-white/10 rounded-2xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6 transition-colors">
-        {/* Photo Upload Section */}
+  return (
+    <div className="mx-auto max-w-2xl py-4 sm:py-6">
+      {/* Page Header */}
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div>
-              <label className="block text-sm font-semibold text-ink dark:text-white flex items-center gap-2">
-                <span>Product Photos &amp; 3D Capture</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
-                  3D Multi-Angle
-                </span>
-              </label>
-              <p className="text-xs text-ink/70 dark:text-stone-300">
-                Please upload every side of your item (Front, Right, Back, Left, Top, Bottom) and convert it into interactive 3D!
-              </p>
-            </div>
-
-            <div className="flex items-center gap-1 bg-sand/60 dark:bg-stone-800 p-1 rounded-xl text-xs self-start sm:self-auto shrink-0">
-              <button
-                type="button"
-                onClick={() => setUse3DStudio(true)}
-                className={`px-3 py-1 rounded-lg font-medium transition-all ${
-                  use3DStudio
-                    ? "bg-moss text-white shadow-sm"
-                    : "text-ink/70 dark:text-stone-300 hover:text-ink"
-                }`}
-              >
-                🧊 3D Studio
-              </button>
-              <button
-                type="button"
-                onClick={() => setUse3DStudio(false)}
-                className={`px-3 py-1 rounded-lg font-medium transition-all ${
-                  !use3DStudio
-                    ? "bg-moss text-white shadow-sm"
-                    : "text-ink/70 dark:text-stone-300 hover:text-ink"
-                }`}
-              >
-                📸 Classic
-              </button>
-            </div>
-          </div>
-
-          {use3DStudio ? (
-            <div className="space-y-3">
-              <MultiAnglePhotoStudio
-                initialPreviews={anglePreviews}
-                onAnglesChange={(files, previews, ready) => {
-                  setAngleFiles(files);
-                  setAnglePreviews(previews);
-                  setIs3DReady(ready);
-                }}
-                onError={(err) => setError(err)}
-              />
-
-              {/* AI Auto-Fill Action */}
-              {anglePreviews.front && (
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleAiAnalyze}
-                    disabled={analyzingAI}
-                    className="text-xs bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold px-3 py-1.5 rounded-lg hover:from-emerald-700 hover:to-teal-700 flex items-center gap-1.5 shadow-sm disabled:opacity-50"
-                  >
-                    <span>✨</span> {analyzingAI ? "Analyzing photo…" : "AI Auto-Fill Details"}
-                  </button>
-                  <span className="text-[11px] text-ink/60 dark:text-stone-400">
-                    Uses front photo to predict title, condition, and category
-                  </span>
-                </div>
-              )}
-
-              {aiNotice && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs rounded-xl">
-                  {aiNotice}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Thumbnails & Reordering Grid */}
-              {previewUrls.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  {previewUrls.map((url, idx) => (
-                    <div key={idx} className="relative rounded-xl border border-ink/15 dark:border-stone-700 overflow-hidden group bg-sand/30 dark:bg-stone-800">
-                      <img src={url} alt={`Upload ${idx}`} className="w-full aspect-[4/3] object-cover" />
-                      {idx === 0 && (
-                        <span className="absolute top-1.5 left-1.5 bg-moss text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow">
-                          Cover
-                        </span>
-                      )}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-1">
-                        {idx !== 0 && (
-                          <button
-                            type="button"
-                            onClick={() => handleSetAsCover(idx)}
-                            className="text-[10px] bg-white text-ink px-1.5 py-0.5 rounded font-semibold hover:bg-moss hover:text-white shadow"
-                            title="Set as Cover Photo"
-                          >
-                            Cover
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFile(idx)}
-                          className="text-[10px] bg-rose-600 text-white px-1.5 py-0.5 rounded font-semibold hover:bg-rose-700 shadow"
-                          title="Remove photo"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Upload Action Box */}
-              {selectedFiles.length < 5 && (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-ink/20 dark:border-stone-700 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-moss bg-sand/20 dark:bg-stone-800/40 transition-colors"
-                >
-                  <svg className="w-6 h-6 text-ink/40 dark:text-stone-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <p className="text-xs font-semibold text-ink dark:text-stone-200">
-                    {selectedFiles.length === 0 ? "Click to upload photos" : "Add more photos"}
-                  </p>
-                  <p className="text-[11px] text-ink/50 dark:text-stone-400">PNG, JPG, WEBP up to 5MB (4:3 recommended)</p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-                </div>
-              )}
-
-              {/* AI Auto-Fill Action */}
-              {selectedFiles.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleAiAnalyze}
-                    disabled={analyzingAI}
-                    className="text-xs bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold px-3 py-1.5 rounded-lg hover:from-emerald-700 hover:to-teal-700 flex items-center gap-1.5 shadow-sm disabled:opacity-50"
-                  >
-                    <span>✨</span> {analyzingAI ? "Analyzing photo…" : "AI Auto-Fill Details"}
-                  </button>
-                  <span className="text-[11px] text-ink/60 dark:text-stone-400">Uses cover photo to predict title, condition, and category</span>
-                </div>
-              )}
-
-              {aiNotice && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs rounded-xl">
-                  {aiNotice}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Transaction Type */}
-        <div>
-          <label className="block text-sm font-semibold text-ink dark:text-white mb-2">Transaction Type</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {TRANSACTION_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setForm({ ...form, transaction_type: type })}
-                className={`py-2 text-xs font-semibold rounded-xl border transition-all ${
-                  form.transaction_type === type
-                    ? "bg-moss text-white border-moss shadow-sm"
-                    : "border-ink/15 dark:border-stone-700 text-ink/70 dark:text-stone-300 hover:border-moss"
-                }`}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Title */}
-        <div>
-          <label className="block text-sm font-semibold text-ink dark:text-white mb-1.5">Item Title</label>
-          <input
-            type="text"
-            required
-            placeholder="e.g., Engineering Mathematics 3rd Ed. (Erwin Kreyszig)"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            className="w-full border border-ink/20 dark:border-stone-700 rounded-xl px-3.5 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-          />
-        </div>
-
-        {/* Category & Condition */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-ink dark:text-white mb-1.5">Category</label>
-            <select
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              className="w-full border border-ink/20 dark:border-stone-700 rounded-xl px-3 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-            >
-              {CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-ink dark:text-white mb-1.5">Condition</label>
-            <select
-              value={form.condition}
-              onChange={(e) => setForm({ ...form, condition: e.target.value })}
-              className="w-full border border-ink/20 dark:border-stone-700 rounded-xl px-3 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-            >
-              <option value="Brand New">Brand New</option>
-              <option value="Like New">Like New</option>
-              <option value="Good">Good</option>
-              <option value="Fair">Fair</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Price */}
-        <div>
-          <label className="block text-sm font-semibold text-ink dark:text-white mb-1.5">
-            {form.transaction_type === "DONATE" ? "Price (Free)" : "Price (₹)"}
-          </label>
-          <input
-            type="number"
-            disabled={form.transaction_type === "DONATE"}
-            placeholder={form.transaction_type === "DONATE" ? "0 (Donation)" : "e.g., 450"}
-            value={form.transaction_type === "DONATE" ? "" : form.price}
-            onChange={(e) => setForm({ ...form, price: e.target.value })}
-            className="w-full border border-ink/20 dark:border-stone-700 rounded-xl px-3.5 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss disabled:opacity-50"
-          />
-        </div>
-
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-semibold text-ink dark:text-white mb-1.5">Description</label>
-          <textarea
-            rows={3}
-            placeholder="Add details on condition, highlighted pages, accessories included, or rental period..."
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            className="w-full border border-ink/20 dark:border-stone-700 rounded-xl px-3.5 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss resize-none"
-          />
-        </div>
-
-        {/* Pickup Area */}
-        <div>
-          <label className="block text-sm font-semibold text-ink dark:text-white mb-1.5">
-            Pickup Instructions / Area
-          </label>
-          <input
-            type="text"
-            placeholder="e.g., Near Library entrance or Boys Hostel 4 lobby"
-            value={form.pickup_area}
-            onChange={(e) => setForm({ ...form, pickup_area: e.target.value })}
-            className="w-full border border-ink/20 dark:border-stone-700 rounded-xl px-3.5 py-2 text-sm text-ink dark:text-white dark:bg-stone-800 focus:outline-none focus:border-moss"
-          />
-          <p className="text-[11px] text-ink/50 dark:text-stone-400 mt-1">
-            🔒 Protected by Campus Privacy: Hidden from the public feed until both parties confirm a deal.
+          <h1 className="text-xl font-semibold text-text">List an item</h1>
+          <p className="text-xs text-text-secondary">
+            Share books, electronics, or campus gear with verified peers
           </p>
         </div>
+        <div className="flex items-center gap-3">
+          {lastSaved && (
+            <span className="hidden text-xs text-text-tertiary sm:inline">
+              Draft saved {lastSaved}
+            </span>
+          )}
+          <Link href="/" className="text-xs font-medium text-text-secondary hover:text-text">
+            Cancel
+          </Link>
+        </div>
+      </div>
 
+      {/* 5-Step Stepper Header */}
+      <nav aria-label="Progress" className="mb-6">
+        <ol className="flex items-center justify-between border-b border-border pb-3">
+          {STEPS.map((s) => {
+            const isActive = s.id === step;
+            const isDone = s.id < step;
+            return (
+              <li key={s.id} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (s.id < step || validateStep(step)) {
+                      setStep(s.id);
+                    }
+                  }}
+                  className={`flex items-center gap-2 text-xs font-medium transition-colors ${
+                    isActive
+                      ? "text-primary"
+                      : isDone
+                      ? "text-text hover:text-primary"
+                      : "text-text-tertiary"
+                  }`}
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold ${
+                      isActive
+                        ? "bg-primary text-on-primary"
+                        : isDone
+                        ? "bg-primary-subtle text-primary"
+                        : "border border-border bg-surface-muted text-text-tertiary"
+                    }`}
+                  >
+                    {isDone ? <Check className="h-3 w-3" strokeWidth={2.5} /> : s.id}
+                  </span>
+                  <span className="hidden sm:inline">{s.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+
+      {/* Main Stepped Form Container */}
+      <div className="rounded-lg border border-border bg-surface p-5 sm:p-6">
         {error && (
-          <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-xs rounded-xl">
-            {error}
+          <div className="mb-5 flex items-start gap-2.5 rounded-md border border-danger/20 bg-danger-subtle p-3 text-xs text-danger">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={1.75} />
+            <div className="flex-1">{error}</div>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="text-danger hover:opacity-70"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full bg-moss text-white font-semibold py-3 rounded-xl hover:bg-moss/90 transition-all text-sm shadow-sm disabled:opacity-50"
-        >
-          {submitting ? "Publishing listing…" : "Publish Listing"}
-        </button>
-      </form>
+        {/* STEP 1: PHOTOS */}
+        {step === 1 && (
+          <div className="space-y-5">
+            <div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-text">Photos and 3D capture</h2>
+                  <p className="text-xs text-text-secondary">
+                    Clear photos help your listing sell faster and build trust
+                  </p>
+                </div>
+
+                <div className="flex items-center rounded-md border border-border bg-surface-muted p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setUse3DStudio(true)}
+                    className={`inline-flex items-center gap-1 rounded-sm px-2.5 py-1 font-medium transition-colors ${
+                      use3DStudio
+                        ? "bg-surface text-text shadow-xs"
+                        : "text-text-secondary hover:text-text"
+                    }`}
+                  >
+                    <Layers className="h-3.5 w-3.5" strokeWidth={1.75} /> 3D studio
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUse3DStudio(false)}
+                    className={`inline-flex items-center gap-1 rounded-sm px-2.5 py-1 font-medium transition-colors ${
+                      !use3DStudio
+                        ? "bg-surface text-text shadow-xs"
+                        : "text-text-secondary hover:text-text"
+                    }`}
+                  >
+                    <Camera className="h-3.5 w-3.5" strokeWidth={1.75} /> Standard photos
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {use3DStudio ? (
+              <div className="space-y-4">
+                <MultiAnglePhotoStudio
+                  initialPreviews={anglePreviews}
+                  onAnglesChange={(files, previews, ready) => {
+                    setAngleFiles(files);
+                    setAnglePreviews(previews);
+                    setIs3DReady(ready);
+                  }}
+                  onError={(err) => setError(err)}
+                />
+
+                {anglePreviews.front && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleAiAnalyze}
+                      disabled={analyzingAI}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
+                      <span>{analyzingAI ? "Analyzing photo..." : "Autofill details from photo"}</span>
+                    </Button>
+                    <span className="text-xs text-text-tertiary">
+                      Uses front view to suggest title and category
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {previewUrls.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {previewUrls.map((url, idx) => (
+                      <div
+                        key={idx}
+                        className="group relative aspect-4/3 overflow-hidden rounded-md border border-border bg-surface-muted"
+                      >
+                        <img src={url} alt={`Upload ${idx + 1}`} className="h-full w-full object-cover" />
+                        {idx === 0 && (
+                          <span className="absolute left-2 top-2 rounded bg-surface px-1.5 py-0.5 text-xs font-medium text-text shadow-xs">
+                            Cover
+                          </span>
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                          {idx !== 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetAsCover(idx)}
+                              className="rounded-md bg-surface px-2 py-1 text-xs font-medium text-text shadow-xs hover:bg-surface-muted"
+                            >
+                              Set cover
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile(idx)}
+                            className="rounded-md bg-danger px-2 py-1 text-xs font-medium text-on-primary shadow-xs hover:opacity-90"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {selectedFiles.length < 6 && (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border p-6 text-center transition-colors hover:border-primary hover:bg-surface-muted"
+                  >
+                    <Upload className="mb-2 h-6 w-6 text-text-tertiary" strokeWidth={1.75} />
+                    <p className="text-xs font-medium text-text">
+                      {selectedFiles.length === 0 ? "Click to upload photos" : "Add more photos"}
+                    </p>
+                    <p className="mt-0.5 text-xs text-text-tertiary">
+                      PNG, JPG, WEBP up to 5MB (maximum 6 photos)
+                    </p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                  </div>
+                )}
+
+                {selectedFiles.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleAiAnalyze}
+                      disabled={analyzingAI}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
+                      <span>{analyzingAI ? "Analyzing photo..." : "Autofill details from cover"}</span>
+                    </Button>
+                    <span className="text-xs text-text-tertiary">
+                      Uses cover photo to suggest title and category
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {aiNotice && (
+              <div className="rounded-md border border-primary/20 bg-primary-subtle p-3 text-xs text-primary">
+                {aiNotice}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* STEP 2: DETAILS */}
+        {step === 2 && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-text">Item details</h2>
+              <p className="text-xs text-text-secondary">
+                Describe the item accurately to help students search
+              </p>
+            </div>
+
+            <div>
+              <Input
+                label="Item title"
+                required
+                placeholder="e.g. Engineering Mathematics 3rd Ed. (Erwin Kreyszig)"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                helperText="Include edition, author, or model number if applicable"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-text">
+                  Category <span className="text-danger">*</span>
+                </label>
+                <Select
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                >
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-text">
+                  Condition <span className="text-danger">*</span>
+                </label>
+                <Select
+                  value={form.condition}
+                  onChange={(e) => setForm({ ...form, condition: e.target.value })}
+                >
+                  {CONDITIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-text">
+                Description
+              </label>
+              <textarea
+                rows={4}
+                placeholder="Note any highlights, minor scratches, included cables, or textbook condition..."
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className="w-full rounded-md border border-border bg-surface p-3 text-sm text-text placeholder:text-text-tertiary focus:border-primary focus:outline-hidden"
+              />
+              <p className="mt-1 text-xs text-text-tertiary">
+                {form.description.length} / 2000 characters
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: PRICE & TYPE */}
+        {step === 3 && (
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-sm font-semibold text-text">Price and transaction type</h2>
+              <p className="text-xs text-text-secondary">
+                Select how you want to transact on campus
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-medium text-text">
+                Transaction type
+              </label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {TRANSACTION_TYPES.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setForm({ ...form, transaction_type: type })}
+                    className={`rounded-md border p-3 text-left transition-colors ${
+                      form.transaction_type === type
+                        ? "border-primary bg-primary-subtle text-primary font-medium"
+                        : "border-border bg-surface text-text-secondary hover:border-border-strong hover:text-text"
+                    }`}
+                  >
+                    <div className="text-xs font-semibold">{type}</div>
+                    <div className="mt-1 text-[11px] text-text-tertiary">
+                      {type === "BUY" && "Standard one-time sale"}
+                      {type === "RENT" && "Lend for a period"}
+                      {type === "EXCHANGE" && "Trade for other gear"}
+                      {type === "DONATE" && "Give away for free"}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {form.transaction_type !== "DONATE" && (
+              <div>
+                <Input
+                  label={form.transaction_type === "RENT" ? "Rental price (₹)" : "Price (₹)"}
+                  type="number"
+                  required={form.transaction_type === "BUY"}
+                  placeholder="e.g. 450"
+                  value={form.price}
+                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  helperText={
+                    form.price
+                      ? `Formatted: ₹${new Intl.NumberFormat("en-IN").format(Number(form.price) || 0)}`
+                      : "Zero platform fees. You receive 100% of the agreed amount."
+                  }
+                />
+              </div>
+            )}
+
+            {form.transaction_type === "DONATE" && (
+              <div className="rounded-md border border-border bg-surface-muted p-4 text-xs text-text-secondary">
+                Donations are free of cost for fellow students. The price is automatically set to ₹0.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* STEP 4: LOCATION */}
+        {step === 4 && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-text">Campus meetup location</h2>
+              <p className="text-xs text-text-secondary">
+                Designate a recognizable campus landmark for handover
+              </p>
+            </div>
+
+            <div>
+              <Input
+                label="Pickup instructions or area"
+                placeholder="e.g. Near Central Library entrance or Boys Hostel 4 lobby"
+                value={form.pickup_area}
+                onChange={(e) => setForm({ ...form, pickup_area: e.target.value })}
+                helperText="Location details are kept private and revealed only after an offer is confirmed."
+              />
+            </div>
+
+            <div className="rounded-md border border-border bg-surface-muted p-4 text-xs leading-relaxed text-text-secondary">
+              <div className="flex items-start gap-2.5">
+                <MapPin className="h-4 w-4 shrink-0 text-primary mt-0.5" strokeWidth={1.75} />
+                <div>
+                  <p className="font-medium text-text">Campus privacy protection</p>
+                  <p className="mt-0.5">
+                    Your exact coordinates are never shown on the public map. The feed displays only your approximate distance to protect student safety.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 5: REVIEW */}
+        {step === 5 && (
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-sm font-semibold text-text">Review and publish</h2>
+              <p className="text-xs text-text-secondary">
+                Confirm your listing details before publishing to campus
+              </p>
+            </div>
+
+            <div className="rounded-md border border-border bg-surface-muted p-4 text-xs space-y-3">
+              <div className="flex items-start justify-between gap-4 border-b border-border pb-3">
+                <div>
+                  <div className="text-xs text-text-tertiary">Item</div>
+                  <div className="text-sm font-semibold text-text mt-0.5">{form.title}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-text-tertiary">Price</div>
+                  <div className="font-mono text-sm font-semibold tabular-nums text-text mt-0.5">
+                    {form.transaction_type === "DONATE"
+                      ? "Free"
+                      : form.price
+                      ? `₹${new Intl.NumberFormat("en-IN").format(Number(form.price))}`
+                      : "Negotiable"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div>
+                  <span className="text-text-tertiary">Type:</span>
+                  <div className="mt-0.5">
+                    <TypeTag type={form.transaction_type} />
+                  </div>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Category:</span>
+                  <div className="mt-0.5 font-medium text-text truncate">{form.category}</div>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">Condition:</span>
+                  <div className="mt-0.5 font-medium text-text">{form.condition}</div>
+                </div>
+                <div>
+                  <span className="text-text-tertiary">3D model:</span>
+                  <div className="mt-0.5 font-medium text-text">
+                    {is3DReady ? "Ready" : "Not configured"}
+                  </div>
+                </div>
+              </div>
+
+              {form.description && (
+                <div className="border-t border-border pt-3">
+                  <span className="text-text-tertiary">Description:</span>
+                  <p className="mt-0.5 text-text leading-relaxed whitespace-pre-wrap">
+                    {form.description}
+                  </p>
+                </div>
+              )}
+
+              {form.pickup_area && (
+                <div className="border-t border-border pt-3">
+                  <span className="text-text-tertiary">Pickup note:</span>
+                  <p className="mt-0.5 text-text">{form.pickup_area}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Navigation Actions */}
+        <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
+          <div>
+            {step > 1 && (
+              <Button type="button" variant="secondary" onClick={handleBack}>
+                <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+                <span>Back</span>
+              </Button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {step < 5 ? (
+              <Button type="button" variant="primary" onClick={handleNext}>
+                <span>Continue</span>
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => handleSubmit()}
+                disabled={submitting}
+              >
+                <span>{submitting ? "Publishing listing..." : "Publish listing"}</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
