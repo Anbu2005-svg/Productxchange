@@ -9,6 +9,7 @@ MODEL_PATH = os.getenv("PRICE_MODEL_PATH", "models/price_xgb.json")
 def _load():
     global _model
     if _model is None and os.path.exists(MODEL_PATH):
+        # pyrefly: ignore[missing-import]
         import xgboost as xgb
         _model = xgb.XGBRegressor()
         _model.load_model(MODEL_PATH)

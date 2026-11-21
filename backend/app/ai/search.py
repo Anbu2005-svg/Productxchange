@@ -4,6 +4,7 @@ Score = 0.7 * semantic_similarity + 0.3 * proximity_score."""
 import math
 
 def embed(text: str) -> list[float]:
+    # pyrefly: ignore[missing-import]
     from sentence_transformers import SentenceTransformer  # pip install sentence-transformers
     global _m
     try:
