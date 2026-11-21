@@ -25,12 +25,16 @@ def upgrade():
         sa.Column("seller_completed", sa.Boolean(), server_default=sa.text("false"), nullable=False)
     )
 
-    # pgvector embedding column for semantic search
-    op.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS embedding vector(1024)")
-    # HNSW index for fast approximate nearest neighbor search
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_products_embedding_hnsw ON products USING hnsw (embedding vector_cosine_ops)"
-    )
+    # pgvector embedding column for semantic search (if extension exists)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS embedding vector(1024);
+                CREATE INDEX IF NOT EXISTS idx_products_embedding_hnsw ON products USING hnsw (embedding vector_cosine_ops);
+            END IF;
+        END $$;
+    """)
 
 
 def downgrade():

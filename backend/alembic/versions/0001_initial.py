@@ -17,7 +17,14 @@ depends_on = None
 
 def upgrade():
     op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector")  # pgvector, for Step 7 semantic search
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN
+                CREATE EXTENSION IF NOT EXISTS vector;
+            END IF;
+        END $$;
+    """)
 
     op.create_table(
         "users",

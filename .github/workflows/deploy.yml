@@ -1,13 +1,11 @@
 name: Deploy
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 env:
   AWS_REGION: ap-south-1
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: "${{ secrets.AWS_DEPLOY_ROLE_ARN != '' }}"
     permissions: { id-token: write, contents: read }
     steps:
       - uses: actions/checkout@v4
