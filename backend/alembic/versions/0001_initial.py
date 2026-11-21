@@ -69,8 +69,10 @@ def upgrade():
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
     # Critical for /products/nearby performance at scale — geography column needs a GIST index.
-    op.execute("CREATE INDEX idx_products_location ON products USING GIST (location)")
-    op.execute("CREATE INDEX idx_users_location ON users USING GIST (location)")
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute("CREATE INDEX IF NOT EXISTS idx_products_location ON products USING GIST (location)")
+        op.execute("CREATE INDEX IF NOT EXISTS idx_users_location ON users USING GIST (location)")
 
     op.create_table(
         "transactions",

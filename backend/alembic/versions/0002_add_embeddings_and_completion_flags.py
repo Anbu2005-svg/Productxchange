@@ -26,15 +26,17 @@ def upgrade():
     )
 
     # pgvector embedding column for semantic search (if extension exists)
-    op.execute("""
-        DO $$
-        BEGIN
-            IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
-                ALTER TABLE products ADD COLUMN IF NOT EXISTS embedding vector(1024);
-                CREATE INDEX IF NOT EXISTS idx_products_embedding_hnsw ON products USING hnsw (embedding vector_cosine_ops);
-            END IF;
-        END $$;
-    """)
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+                    ALTER TABLE products ADD COLUMN IF NOT EXISTS embedding vector(1024);
+                    CREATE INDEX IF NOT EXISTS idx_products_embedding_hnsw ON products USING hnsw (embedding vector_cosine_ops);
+                END IF;
+            END $$;
+        """)
 
 
 def downgrade():

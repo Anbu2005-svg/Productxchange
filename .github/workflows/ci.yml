@@ -19,9 +19,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install -r backend/requirements.txt ruff
-      - run: ruff check backend/app
-      - run: cd backend && alembic upgrade head && pytest -q
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt ruff
+      - name: Lint check with Ruff
+        run: ruff check backend/app
+      - name: Verify database migrations
+        working-directory: backend
+        run: alembic upgrade head
+      - name: Run automated test suite
+        working-directory: backend
+        run: pytest -q
   frontend:
     runs-on: ubuntu-latest
     steps:
