@@ -21,6 +21,8 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import { TypeTag } from "@/components/ui/Badge";
+import BarcodeScannerModal from "@/components/BarcodeScannerModal";
+import { BookMetadata } from "@/lib/isbn";
 import {
   Camera,
   Layers,
@@ -35,6 +37,7 @@ import {
   AlertCircle,
   FileText,
   Tag,
+  Barcode,
 } from "lucide-react";
 
 const TRANSACTION_TYPES = ["BUY", "EXCHANGE", "RENT", "DONATE"] as const;
@@ -96,6 +99,23 @@ export default function NewListingPage() {
   const [angleFiles, setAngleFiles] = useState<AngleData>({});
   const [anglePreviews, setAnglePreviews] = useState<AnglePreviews>({});
   const [is3DReady, setIs3DReady] = useState(false);
+
+  // Barcode / ISBN Scanner state
+  const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+  const [scannedIsbn, setScannedIsbn] = useState<string | null>(null);
+
+  const handleBookDetected = (book: BookMetadata) => {
+    setForm((prev) => ({
+      ...prev,
+      title: book.title,
+      category: "Textbooks & Study Material",
+      description: prev.description
+        ? `${prev.description}\n\n${book.description || ""}`.trim()
+        : book.description || "",
+    }));
+    setScannedIsbn(book.isbn);
+    showToast(`Autofilled details for "${book.title}"`, "success");
+  };
 
   // Restore draft from localStorage
   useEffect(() => {
@@ -608,12 +628,40 @@ export default function NewListingPage() {
         {/* STEP 2: DETAILS */}
         {step === 2 && (
           <div className="space-y-4">
-            <div>
-              <h2 className="text-sm font-semibold text-text">Item details</h2>
-              <p className="text-xs text-text-secondary">
-                Describe the item accurately to help students search
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-text">Item details</h2>
+                <p className="text-xs text-text-secondary">
+                  Describe the item accurately to help students search
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowBarcodeModal(true)}
+              >
+                <Barcode className="h-4 w-4 text-primary" strokeWidth={1.75} />
+                <span>Scan Book Barcode</span>
+              </Button>
             </div>
+
+            {scannedIsbn && (
+              <div className="flex items-center justify-between rounded-md border border-primary/20 bg-primary-subtle px-3 py-2 text-xs text-primary">
+                <span>
+                  Autofilled from ISBN: <strong className="font-mono">{scannedIsbn}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setScannedIsbn(null)}
+                  className="rounded p-0.5 text-text-tertiary hover:bg-surface hover:text-text"
+                  aria-label="Dismiss ISBN notice"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
 
             <div>
               <Input
@@ -875,6 +923,13 @@ export default function NewListingPage() {
             )}
           </div>
         </div>
+
+        {/* Barcode / ISBN Scanner Modal */}
+        <BarcodeScannerModal
+          isOpen={showBarcodeModal}
+          onClose={() => setShowBarcodeModal(false)}
+          onBookFound={handleBookDetected}
+        />
       </div>
     </div>
   );

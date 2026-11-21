@@ -16,6 +16,7 @@ import { DealCardSkeleton } from "@/components/Skeleton";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Badge, { TypeTag } from "@/components/ui/Badge";
+import UpiPaymentModal from "@/components/UpiPaymentModal";
 import {
   Check,
   X,
@@ -33,6 +34,7 @@ import {
   Plus,
   ArrowRight,
   RotateCw,
+  QrCode,
 } from "lucide-react";
 
 type DealTab = "active" | "rentals" | "completed" | "cancelled" | "all";
@@ -73,6 +75,9 @@ export default function DealsPage() {
 
   // Copy feedback state
   const [copiedPinTxId, setCopiedPinTxId] = useState<number | null>(null);
+
+  // Direct UPI Payment Modal state
+  const [selectedUpiDeal, setSelectedUpiDeal] = useState<Transaction | null>(null);
 
   async function loadData() {
     setLoading(true);
@@ -806,6 +811,22 @@ export default function DealsPage() {
                           <p className="mt-2 text-xs text-text-tertiary">
                             Show this PIN to the seller only after physically inspecting the item at the meetup location.
                           </p>
+
+                          {/* UPI Direct Pay Action */}
+                          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-2.5">
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              onClick={() => setSelectedUpiDeal(tx)}
+                            >
+                              <QrCode className="h-3.5 w-3.5" strokeWidth={1.75} />
+                              <span>Pay via UPI / QR</span>
+                            </Button>
+                            <span className="text-xs text-text-tertiary">
+                              Launch Google Pay, PhonePe, or scan QR
+                            </span>
+                          </div>
                         </div>
                       ) : (
                         <div className="border-t border-border pt-3">
@@ -835,6 +856,22 @@ export default function DealsPage() {
                           <p className="mt-2 text-xs text-text-tertiary">
                             Ask the buyer for their PIN upon handing over the item to verify the exchange.
                           </p>
+
+                          {/* Seller QR Display Action */}
+                          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-2.5">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setSelectedUpiDeal(tx)}
+                            >
+                              <QrCode className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} />
+                              <span>Show My UPI QR</span>
+                            </Button>
+                            <span className="text-xs text-text-tertiary">
+                              Display payment QR for buyer to scan
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1052,6 +1089,34 @@ export default function DealsPage() {
           );
         })}
       </div>
+
+      {/* Direct UPI Payment / QR Modal */}
+      {selectedUpiDeal && (
+        <UpiPaymentModal
+          isOpen={!!selectedUpiDeal}
+          onClose={() => setSelectedUpiDeal(null)}
+          sellerName={
+            selectedUpiDeal.seller_id === currentUser?.id
+              ? "You (Seller)"
+              : selectedUpiDeal.seller?.full_name || "Campus Seller"
+          }
+          defaultUpiId={
+            typeof window !== "undefined"
+              ? localStorage.getItem(`px_upi_seller_${selectedUpiDeal.seller_id}`) || ""
+              : ""
+          }
+          amount={selectedUpiDeal.agreed_price || selectedUpiDeal.product?.price || 0}
+          dealId={selectedUpiDeal.id}
+          productTitle={selectedUpiDeal.product?.title}
+          isSeller={selectedUpiDeal.seller_id === currentUser?.id}
+          onUpiIdSaved={(savedUpi) => {
+            if (typeof window !== "undefined") {
+              localStorage.setItem(`px_upi_seller_${selectedUpiDeal.seller_id}`, savedUpi);
+            }
+            showToast("UPI ID saved for this deal", "success");
+          }}
+        />
+      )}
     </div>
   );
 }

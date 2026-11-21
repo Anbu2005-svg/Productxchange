@@ -107,6 +107,20 @@ def create_notification(db: Session, user_id: int, type: str, title: str, messag
     except Exception:
         pass
 
+    # Asynchronous Web Push notification dispatch (background thread, 0ms blocking)
+    try:
+        from app.services.push_service import dispatch_push_async
+        push_packet = {
+            "title": title,
+            "body": message or "You have an update on ProductXchange.",
+            "url": link or "/deals",
+            "icon": "/icons/icon-192x192.png",
+            "type": type,
+        }
+        dispatch_push_async(user_id, push_packet)
+    except Exception:
+        pass
+
 
 @router.get("")
 def list_notifications(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -299,6 +313,19 @@ async def send_test_push(
         "link": test_link,
         "icon": "/icons/icon-192x192.png",
     })
+
+    # Dispatch via background Web Push
+    try:
+        from app.services.push_service import dispatch_push_async
+        dispatch_push_async(user.id, {
+            "title": test_title,
+            "body": test_message,
+            "url": test_link,
+            "icon": "/icons/icon-192x192.png",
+            "type": "PUSH_TEST",
+        })
+    except Exception:
+        pass
 
     from app.models.notification import PushSubscription
     subs_count = db.query(PushSubscription).filter(PushSubscription.user_id == user.id).count()

@@ -23,7 +23,7 @@ export default function MobileBottomNav() {
         setUser(u);
         api("/chat/unread-count")
           .then((res) => setUnreadChatCount(res.unread_count || 0))
-          .catch(() => {});
+          .catch(() => { });
       })
       .catch(() => setUser(null));
   }, [pathname]);
@@ -51,11 +51,10 @@ export default function MobileBottomNav() {
         {/* 1. Explore */}
         <Link
           href="/"
-          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${
-            isActive("/")
-              ? "text-primary font-semibold"
-              : "text-text-secondary hover:text-text"
-          }`}
+          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${isActive("/")
+            ? "text-primary font-semibold"
+            : "text-text-secondary hover:text-text"
+            }`}
         >
           <MapPin className="w-5 h-5" strokeWidth={1.75} />
           <span className="text-[12px] mt-1">Explore</span>
@@ -64,11 +63,10 @@ export default function MobileBottomNav() {
         {/* 2. Deals */}
         <Link
           href={user ? "/deals" : "/login"}
-          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${
-            isActive("/deals")
-              ? "text-primary font-semibold"
-              : "text-text-secondary hover:text-text"
-          }`}
+          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${isActive("/deals")
+            ? "text-primary font-semibold"
+            : "text-text-secondary hover:text-text"
+            }`}
         >
           <Handshake className="w-5 h-5" strokeWidth={1.75} />
           <span className="text-[12px] mt-1">Deals</span>
@@ -77,11 +75,10 @@ export default function MobileBottomNav() {
         {/* 3. Sell (Small primary-filled rounded square, no glow, no floating) */}
         <Link
           href={user ? "/listings/new" : "/login"}
-          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${
-            isActive("/listings/new")
-              ? "text-primary font-semibold"
-              : "text-text-secondary hover:text-text"
-          }`}
+          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${isActive("/listings/new")
+            ? "text-primary font-semibold"
+            : "text-text-secondary hover:text-text"
+            }`}
           aria-label="Create listing"
         >
           <div className="w-7 h-7 rounded-sm bg-primary text-primary-fg flex items-center justify-center">
@@ -93,11 +90,10 @@ export default function MobileBottomNav() {
         {/* 4. Chat */}
         <Link
           href={user ? "/chat" : "/login"}
-          className={`relative flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${
-            isActive("/chat")
-              ? "text-primary font-semibold"
-              : "text-text-secondary hover:text-text"
-          }`}
+          className={`relative flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${isActive("/chat")
+            ? "text-primary font-semibold"
+            : "text-text-secondary hover:text-text"
+            }`}
         >
           <div className="relative">
             <MessageSquare className="w-5 h-5" strokeWidth={1.75} />
@@ -113,11 +109,10 @@ export default function MobileBottomNav() {
         {/* 5. Profile */}
         <Link
           href={user ? "/profile" : "/login"}
-          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${
-            isActive("/profile")
-              ? "text-primary font-semibold"
-              : "text-text-secondary hover:text-text"
-          }`}
+          className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] transition-colors ${isActive("/profile")
+            ? "text-primary font-semibold"
+            : "text-text-secondary hover:text-text"
+            }`}
         >
           <UserIcon className="w-5 h-5" strokeWidth={1.75} />
           <span className="text-[12px] mt-1">Profile</span>
