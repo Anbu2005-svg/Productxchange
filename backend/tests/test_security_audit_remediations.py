@@ -448,7 +448,8 @@ def test_px_sec_10_admin_csv_export_endpoint(client, user_a, db):
 
     # Verify frontend file no longer has hardcoded localhost:8000 in downloadCsv
     import pathlib
-    frontend_admin_page = pathlib.Path("frontend/src/app/admin/page.tsx").read_text(encoding="utf-8")
+    project_root = pathlib.Path(__file__).resolve().parent.parent.parent
+    frontend_admin_page = (project_root / "frontend" / "src" / "app" / "admin" / "page.tsx").read_text(encoding="utf-8")
     assert "http://localhost:8000/admin/export" not in frontend_admin_page
     assert "${API_BASE}/admin/export/${resource}" in frontend_admin_page
     assert 'credentials: "include"' in frontend_admin_page
