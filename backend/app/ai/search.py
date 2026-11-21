@@ -6,8 +6,10 @@ import math
 def embed(text: str) -> list[float]:
     from sentence_transformers import SentenceTransformer  # pip install sentence-transformers
     global _m
-    try: _m
-    except NameError: _m = SentenceTransformer("BAAI/bge-m3")
+    try:
+        _ = _m
+    except NameError:
+        _m = SentenceTransformer("BAAI/bge-m3")
     return _m.encode(text, normalize_embeddings=True).tolist()
 
 def proximity_score(distance_m: float, radius_km: float) -> float:

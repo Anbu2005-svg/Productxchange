@@ -1,0 +1,16 @@
+# Ruff configuration for ProductXchange
+target-version = "py312"
+line-length = 120
+
+[lint]
+# Select core error rules
+select = ["E", "F"]
+ignore = [
+    "E501",  # line too long
+    "E402",  # module level import not at top of file
+    "E712",  # comparison to False using == (required for SQLAlchemy Column == False)
+    "E722",  # bare except
+    "F401",  # imported but unused
+    "F841",  # local variable assigned but never used
+    "F821",  # undefined name (e.g. forward references)
+]

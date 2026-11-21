@@ -10,7 +10,8 @@ def _load():
     global _model
     if _model is None and os.path.exists(MODEL_PATH):
         import xgboost as xgb
-        _model = xgb.XGBRegressor(); _model.load_model(MODEL_PATH)
+        _model = xgb.XGBRegressor()
+        _model.load_model(MODEL_PATH)
     return _model
 
 def suggest_price(db, category: str, condition: str | None) -> float | None:

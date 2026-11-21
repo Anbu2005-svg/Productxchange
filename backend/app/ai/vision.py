@@ -1,7 +1,9 @@
 """Step 7a: image -> structured attributes (Qwen3-VL).
 Serve Qwen3-VL behind an OpenAI-compatible endpoint (vLLM / hosted) and set VISION_API_URL.
 Without it, returns empty suggestions so manual listing still works."""
-import base64, json, os
+import base64
+import json
+import os
 import httpx
 
 _openai_key = os.getenv("OPENAI_API_KEY", "")

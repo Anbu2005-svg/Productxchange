@@ -73,7 +73,7 @@ class TransactionService:
             self.db, seller_id, "OFFER_RECEIVED",
             "New offer received!",
             f"You received an offer of ₹{offer_amount or 0} on your listing.",
-            f"/deals"
+            "/deals"
         )
         self._send_notification_email(
             seller_id,

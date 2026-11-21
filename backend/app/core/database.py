@@ -22,7 +22,7 @@ def compile_array(element, compiler, **kw):
     return "TEXT"
 
 
-sqlite3.register_adapter(list, lambda l: json.dumps(l))
+sqlite3.register_adapter(list, lambda val: json.dumps(val))
 
 
 def _haversine(lon1, lat1, lon2, lat2):
