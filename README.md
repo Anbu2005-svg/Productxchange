@@ -14,6 +14,46 @@ The platform addresses core student-marketplace vulnerabilities: stranger danger
 
 ---
 
+## Table of Contents
+
+- [1. Chronological Project Evolution & Context Log](#chronological-project-evolution--chat-context-log)
+- [2. Master Inventory: All Features & How They Work](#master-inventory-all-features--how-they-work)
+  - [1. Authentication, Onboarding & Campus Trust Profile](#1-authentication-onboarding--campus-trust-profile)
+  - [2. Geolocation-Aware Marketplace Discovery & Proximity Engine](#2-geolocation-aware-marketplace-discovery--proximity-engine)
+  - [3. Listing Creation with AI Suggestions & Live Barcode / ISBN Scanner](#3-listing-creation-with-ai-suggestions--live-barcode--isbn-scanner)
+  - [4. Deterministic 6-Stage Negotiation State Machine & Handshake Pass](#4-deterministic-6-stage-negotiation-state-machine--handshake-pass)
+  - [5. Direct NPCI UPI Intent & Dynamic In-Memory Vector SVG QR Generator](#5-direct-npci-upi-intent--dynamic-in-memory-vector-svg-qr-generator)
+  - [6. Real-Time Chat & Instant Counter-Offer Negotiation](#6-real-time-chat--instant-counter-offer-negotiation)
+  - [7. Asynchronous Non-Blocking Web Push Notifications](#7-asynchronous-non-blocking-web-push-notifications)
+  - [8. Circular Campus Rentals & Return Lifecycle](#8-circular-campus-rentals--return-lifecycle)
+  - [9. Student Trust, Verified Reviews & Two-Way Mutual Blocking](#9-student-trust-verified-reviews--two-way-mutual-blocking)
+  - [10. Admin Governance Center & Streaming CSV Exports](#10-admin-governance-center--streaming-csv-exports)
+  - [11. Campus Sustainability & Environmental Impact Analytics](#11-campus-sustainability--environmental-impact-analytics)
+  - [12. Progressive Web App (PWA) & Mobile Web App Excellence](#12-progressive-web-app-pwa--mobile-web-app-excellence)
+  - [13. Concurrency, Performance & Security Hardening (50 Lakh Scale)](#13-concurrency-performance--security-hardening-50-lakh-scale)
+- [3. Step-by-Step Feature Testing & Verification Guide](#step-by-step-feature-testing--verification-guide)
+  - [Step 1: Start the Local Development Servers](#step-1-start-the-local-development-servers)
+  - [Step 2: Test Authentication & Campus Trust Profile](#step-2-test-authentication--campus-trust-profile)
+  - [Step 3: Test Marketplace Browsing & Proximity Search](#step-3-test-marketplace-browsing--proximity-search)
+  - [Step 4: Test Live Barcode / ISBN Scanner (Camera & Presets)](#step-4-test-live-barcode--isbn-scanner-camera--presets)
+  - [Step 5: Test AI Price & Category Suggestion](#step-5-test-ai-price--category-suggestion)
+  - [Step 6: Test Wishlist & Saved Products](#step-6-test-wishlist--saved-products)
+  - [Step 7: Test the Negotiation State Machine & Counter-Offers](#step-7-test-the-negotiation-state-machine--counter-offers)
+  - [Step 8: Test Direct NPCI UPI Intent & Dynamic Vector SVG QR Code](#step-8-test-direct-npci-upi-intent--dynamic-vector-svg-qr-code)
+  - [Step 9: Test Handshake Pass & 6-Digit PIN Physical Verification](#step-9-test-handshake-pass--6-digit-pin-physical-verification)
+  - [Step 10: Test Real-Time Chat & Messaging](#step-10-test-real-time-chat--messaging)
+  - [Step 11: Test Admin Governance & CSV Export](#step-11-test-admin-governance--csv-export)
+  - [Step 12: Test Campus Sustainability Impact](#step-12-test-campus-sustainability-impact)
+  - [Step 13: Test Progressive Web App (PWA) & Offline Mode](#step-13-test-progressive-web-app-pwa--offline-mode)
+  - [Step 14: Run the Complete Automated Test Suite](#step-14-run-the-complete-automated-test-suite)
+- [4. Quickstart & Local Setup](#quickstart--local-setup)
+- [5. Complete Verification & Test Suite Matrix (200 Tests)](#complete-verification--test-suite-matrix)
+- [6. Tech Stack & Architecture](#tech-stack--architecture)
+- [7. Project Structure](#project-structure)
+- [8. Author & Academic Acknowledgement](#author--academic-acknowledgement)
+
+---
+
 ## Chronological Project Evolution & Chat Context Log
 
 This section chronicles the complete engineering trajectory of ProductXchange based on all instructions and requests provided during this development session:
@@ -307,6 +347,52 @@ Run all 200 automated unit, integration, and security tests across all 24 module
 ```
 200 passed, 1 warning in 64.73s (0:01:04) — 100% Pass Rate across 24 Modules
 ```
+
+---
+
+## Quickstart & Local Setup
+
+### Prerequisites
+- **Python 3.12+**
+- **Node.js 18+ & npm**
+- **Git**
+
+### 1. Backend Setup
+```bash
+# Clone the repository
+git clone https://github.com/Anbu2005-svg/Productxchange.git
+cd Productxchange
+
+# Create and activate Python virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1    # Windows PowerShell
+# source venv/bin/activate     # Linux / macOS
+
+# Install backend dependencies
+pip install -r backend/requirements.txt ruff
+
+# Start the backend API server
+cd backend
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+- **API Documentation (Swagger UI)**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **API Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
+
+### 2. Frontend Setup
+```bash
+# In a new terminal window:
+cd frontend
+
+# Install Node dependencies
+npm install
+
+# Run the Next.js development server
+npm run dev
+```
+- **Application URL**: [http://localhost:3000](http://localhost:3000)
+- **Demo Student Login**: `anbu@college.edu` | Password: `Password123!`
+- **Demo Peer Student**: `priya@pes.edu` | Password: `Password123!`
+- **Demo Admin Account**: `admin@productxchange.internal` | Password: `AdminPassword123!`
 
 ---
 
