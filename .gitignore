@@ -54,7 +54,13 @@ backend/uploads/
 .DS_Store
 Thumbs.db
 
-# IDEs
+# IDEs & Agent Configs
 .vscode/
 .idea/
+.gemini/
+.agents/
+.ruff_cache/
+skills-lock.json
+skills-lock.json
+skills-lock.json
 
