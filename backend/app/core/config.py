@@ -1,5 +1,8 @@
+import json
 import os
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Annotated
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 DEFAULT_SQLITE_PATH = os.path.join(BACKEND_DIR, "productxchange.db").replace("\\", "/")
@@ -9,7 +12,19 @@ class Settings(BaseSettings):
     # Core
     PROJECT_NAME: str = "ProductXchange"
     ENV: str = "development"
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    CORS_ORIGINS: Annotated[list[str], NoDecode] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, list):
+            return v
+        if not v or not isinstance(v, str) or not v.strip():
+            return ["http://localhost:3000", "http://127.0.0.1:3000"]
+        s = v.strip()
+        if s.startswith("["):
+            return json.loads(s)
+        return [origin.strip() for origin in s.split(",") if origin.strip()]
 
     # Database (defaults to local SQLite file in backend/productxchange.db if not overridden)
     DATABASE_URL: str = f"sqlite:///{DEFAULT_SQLITE_PATH}"
