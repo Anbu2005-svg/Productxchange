@@ -39,6 +39,8 @@ export default function RegisterPage() {
     full_name: "",
     college: "",
   });
+  const [step, setStep] = useState<"form" | "verify">("form");
+  const [emailOtp, setEmailOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -51,9 +53,31 @@ export default function RegisterPage() {
 
   const isFormValid = isEmailValid && isNameValid && isPasswordValid && doPasswordsMatch;
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
     if (!isFormValid) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await api("/auth/register/send-otp", {
+        method: "POST",
+        body: JSON.stringify({ email: form.email }),
+      });
+      if (res?.dev_otp) {
+        setEmailOtp(res.dev_otp);
+      }
+      setStep("verify");
+      showToast("Verification code sent to your email", "success");
+    } catch (err: any) {
+      setError(err.message || "Failed to send verification code");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isFormValid || !/^[0-9]{6}$/.test(emailOtp.trim())) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -64,6 +88,7 @@ export default function RegisterPage() {
           password: form.password,
           full_name: form.full_name,
           college: form.college || null,
+          email_otp: emailOtp.trim(),
         }),
       });
       setToken();
@@ -109,7 +134,8 @@ export default function RegisterPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {step === "form" ? (
+        <form onSubmit={handleSendOtp} className="space-y-4">
           <div>
             <Input
               label="Full name"
@@ -238,10 +264,53 @@ export default function RegisterPage() {
               disabled={!isFormValid || submitting}
               loading={submitting}
             >
-              Create account
+              Send verification code
             </Button>
           </div>
         </form>
+        ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <p className="text-xs text-text-secondary">
+            We sent a 6-digit verification code to <span className="font-medium text-text">{form.email}</span>.
+          </p>
+          <Input
+            label="6-digit verification code"
+            id="reg-email-otp"
+            inputMode="numeric"
+            maxLength={6}
+            required
+            placeholder="000000"
+            value={emailOtp}
+            onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full"
+            disabled={emailOtp.trim().length !== 6 || submitting}
+            loading={submitting}
+          >
+            Verify &amp; create account
+          </Button>
+          <div className="flex items-center justify-between text-xs text-text-secondary">
+            <button
+              type="button"
+              onClick={() => { setStep("form"); setError(null); }}
+              className="hover:text-text hover:underline"
+            >
+              Change email
+            </button>
+            <button
+              type="button"
+              onClick={handleSendOtp}
+              disabled={submitting}
+              className="font-medium text-primary hover:underline"
+            >
+              Resend code
+            </button>
+          </div>
+        </form>
+        )}
 
         <div className="mt-6 border-t border-border pt-4 text-center">
           <p className="text-xs text-text-secondary">

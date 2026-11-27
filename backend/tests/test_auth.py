@@ -93,3 +93,40 @@ def test_user_me_and_location_update(client, user_a, auth_headers_a):
     assert loc_res.json()["latitude"] == 13.0827
     assert loc_res.json()["longitude"] == 80.2707
     assert loc_res.json()["location_radius_pref_km"] == 15
+
+
+def test_email_otp_verification_before_register(client, monkeypatch):
+    from app.core.config import settings
+
+    email = "verified.student@college.edu"
+    send_res = client.post("/auth/register/send-otp", json={"email": email})
+    assert send_res.status_code == 200
+    otp = send_res.json()["dev_otp"]
+    assert len(otp) == 6
+
+    # Reject wrong OTP
+    bad_res = client.post(
+        "/auth/register",
+        json={"email": email, "password": "secretpassword1", "email_otp": "000000"},
+    )
+    assert bad_res.status_code == 400
+
+    # Production mode blocks registration without OTP
+    monkeypatch.setattr(settings, "ENV", "production")
+    no_otp = client.post(
+        "/auth/register",
+        json={"email": email, "password": "secretpassword1"},
+    )
+    assert no_otp.status_code == 400
+
+    # Valid OTP succeeds and marks user verified
+    ok_res = client.post(
+        "/auth/register",
+        json={"email": email, "password": "secretpassword1", "email_otp": otp},
+    )
+    assert ok_res.status_code == 200
+    assert "access_token" in ok_res.json()
+    me_res = client.get("/auth/me", headers={"Authorization": f"Bearer {ok_res.json()['access_token']}"})
+    assert me_res.status_code == 200
+    assert me_res.json()["is_verified"] is True
+    client.cookies.clear()

@@ -73,6 +73,28 @@ def send_deal_status_email(to_email: str, recipient_name: str, product_title: st
     return _send_email_raw(to_email, subject, html_body)
 
 
+def is_smtp_configured() -> bool:
+    return bool(SMTP_HOST and SMTP_USER and SMTP_PASSWORD)
+
+
+def send_email_verification_otp(to_email: str, otp: str) -> bool:
+    safe_otp = html.escape(otp)
+    subject = f"{safe_otp} is your ProductXchange verification code"
+    text_body = f"Your ProductXchange verification code is: {otp}\n\nThis code expires in 10 minutes."
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background: #ffffff;">
+        <h2 style="color: #2f6b4f; margin-top: 0;">Verify your email address</h2>
+        <p>Enter this 6-digit code to finish creating your ProductXchange account:</p>
+        <div style="margin: 24px 0; text-align: center;">
+            <span style="display: inline-block; font-size: 28px; font-weight: 700; letter-spacing: 6px; color: #161a18; background: #eef5f1; padding: 12px 24px; border-radius: 8px; border: 1px solid #d2d1ca;">{safe_otp}</span>
+        </div>
+        <p style="font-size: 13px; color: #4b5563;">This code expires in 10 minutes. If you did not request this, you can safely ignore this email.</p>
+        <p style="font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 12px;">ProductXchange — Location-First College Marketplace</p>
+    </div>
+    """
+    return _send_email_raw(to_email, subject, html_body, text_body)
+
+
 def send_password_reset_email(to_email: str, recipient_name: str, reset_url: str):
     safe_recipient = html.escape(recipient_name or "there")
     safe_url = html.escape(reset_url or "")

@@ -9,7 +9,8 @@ branch_labels = None
 depends_on = None
 
 COLUMNS = {
-    "users": {"avatar_url": "VARCHAR", "session_version": "INTEGER NOT NULL DEFAULT 0"},
+    "users": {"avatar_url": "VARCHAR", "session_version": "INTEGER NOT NULL DEFAULT 0",
+              "updated_at": "TIMESTAMPTZ DEFAULT now()"},
     "products": {"embedding": "TEXT", "has_3d": "BOOLEAN DEFAULT FALSE", "image_angles": "TEXT",
                  "expiry_reminded": "BOOLEAN NOT NULL DEFAULT FALSE"},
     "transactions": {"rental_returned": "BOOLEAN NOT NULL DEFAULT FALSE",

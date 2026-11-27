@@ -2,6 +2,12 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
+class EmailOTPRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    email: EmailStr
+
+
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
@@ -10,6 +16,7 @@ class RegisterRequest(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     college: Optional[str] = Field(None, max_length=150)
+    email_otp: Optional[str] = Field(None, min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
 
     @field_validator("password")
     @classmethod

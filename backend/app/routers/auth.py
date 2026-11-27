@@ -21,10 +21,12 @@ from app.core.rate_limit import rate_limit_dependency, check_rate_limit
 
 from app.models.user import User
 from app.schemas.auth import (
-    RegisterRequest, LoginRequest, TokenResponse, OTPVerifyRequest, LocationUpdateRequest,
+    EmailOTPRequest, RegisterRequest, LoginRequest, TokenResponse, OTPVerifyRequest, LocationUpdateRequest,
 )
 from app.schemas.user import UserOut, UserUpdate
-from app.services.email_service import send_password_reset_email
+from app.services.email_service import (
+    is_smtp_configured, send_email_verification_otp, send_password_reset_email,
+)
 
 ALLOWED_AVATAR_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_AVATAR_MIMES = {"image/jpeg", "image/png", "image/webp"}
@@ -305,6 +307,39 @@ def _mask_email(email: str) -> str:
     return f"{masked_name}@{domain}"
 
 
+@router.post("/register/send-otp")
+def send_register_email_otp(payload: EmailOTPRequest, db: Session = Depends(get_db)):
+    clean_email = payload.email.strip().lower()
+    existing = db.query(User).filter(func.lower(User.email) == clean_email).first()
+    if existing:
+        return {"message": "If this email is eligible, a 6-digit verification code has been sent."}
+
+    otp_key = f"email:{clean_email}"
+    _check_otp_cooldown(otp_key)
+    _check_rate_limit(otp_key)
+
+    if settings.ENV == "production" and not is_smtp_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email verification service is not configured yet. Please contact administrator.",
+        )
+
+    otp = f"{secrets.randbelow(1000000):06d}"
+    _store_otp(otp_key, otp)
+    sent = send_email_verification_otp(clean_email, otp)
+    if settings.ENV == "production" and not sent:
+        _delete_stored_otp(otp_key)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not send verification email right now. Please try again later.",
+        )
+
+    resp: dict[str, str] = {"message": "Verification code sent to your email."}
+    if settings.ENV != "production" and not is_smtp_configured():
+        resp["dev_otp"] = otp
+    return resp
+
+
 @router.post("/register", response_model=TokenResponse)
 def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)):
     clean_email = payload.email.strip().lower()
@@ -314,12 +349,44 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         hash_password(payload.password)
         raise HTTPException(status_code=400, detail="Registration failed. Please try a different email or login.")
 
+    email_verified = False
+    verification_method = None
+    if settings.ENV == "production" or payload.email_otp is not None:
+        if not payload.email_otp:
+            raise HTTPException(status_code=400, detail="Email verification code is required.")
+        otp_key = f"email:{clean_email}"
+        now = time.time()
+        failure_entry = _local_otp_failures.get(otp_key, {"count": 0, "first_at": now})
+        if failure_entry.get("count", 0) >= 10:
+            _delete_stored_otp(otp_key)
+            if now - failure_entry.get("first_at", 0) < 900:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many failed verification attempts. Please try again in 15 minutes.",
+                )
+            _local_otp_failures.pop(otp_key, None)
+            failure_entry = {"count": 0, "first_at": now}
+
+        expected = _get_stored_otp(otp_key)
+        if expected is None or not secrets.compare_digest(expected, payload.email_otp):
+            failure_entry["count"] = failure_entry.get("count", 0) + 1
+            failure_entry.setdefault("first_at", now)
+            _local_otp_failures[otp_key] = failure_entry
+            raise HTTPException(status_code=400, detail="Invalid or expired email verification code.")
+
+        _local_otp_failures.pop(otp_key, None)
+        _delete_stored_otp(otp_key)
+        email_verified = True
+        verification_method = "college_email" if clean_email.endswith((".edu", ".ac.in")) else "email_otp"
+
     user = User(
         email=clean_email,
         password_hash=hash_password(payload.password),
         full_name=payload.full_name,
         phone=payload.phone,
         college=payload.college,
+        is_verified=email_verified,
+        verification_method=verification_method,
     )
     db.add(user)
     db.commit()
