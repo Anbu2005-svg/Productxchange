@@ -11,6 +11,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     phone = Column(String, unique=True, index=True, nullable=True)
     password_hash = Column(String, nullable=False)
+    session_version = Column(Integer, nullable=False, default=0, server_default="0")
     full_name = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
 

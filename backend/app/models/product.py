@@ -1,6 +1,6 @@
 import enum
 from sqlalchemy import (
-    Column, Integer, String, Float, DateTime, ForeignKey, func, Enum, ARRAY, Text, Boolean, UniqueConstraint, Index
+    Column, Integer, String, Float, Numeric, false, DateTime, ForeignKey, func, Enum, ARRAY, Text, Boolean, UniqueConstraint, Index
 )
 from sqlalchemy.types import UserDefinedType
 from sqlalchemy.orm import relationship
@@ -58,7 +58,8 @@ class Product(Base):
     description = Column(Text, nullable=True)
     category = Column(String, index=True, nullable=False)
     condition = Column(String, nullable=True)
-    price = Column(Float, nullable=True)
+    expiry_reminded = Column(Boolean, nullable=False, default=False, server_default=false())
+    price = Column(Numeric(12, 2), nullable=True)
     transaction_type = Column(Enum(TransactionType), nullable=False, index=True)
 
     latitude = Column(Float, nullable=True)
@@ -76,7 +77,7 @@ class Product(Base):
 
     # AI-assist fields (populated later in Step 7, nullable for now)
     ai_suggested_category = Column(String, nullable=True)
-    ai_suggested_price = Column(Float, nullable=True)
+    ai_suggested_price = Column(Numeric(12, 2), nullable=True)
     ai_suggested_description = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

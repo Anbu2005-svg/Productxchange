@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional
 import json
 import time
@@ -6,7 +7,7 @@ from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user, decode_access_token
+from app.core.security import get_current_user, decode_session
 from app.core.rate_limit import rate_limit_dependency
 from app.core.websocket import manager
 from app.models.user import User
@@ -210,16 +211,6 @@ async def send_message(conversation_id: int, payload: MessageCreate, user: User 
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
     }
     await manager.broadcast_chat(conversation_id, msg_dict)
-    await manager.send_user_notification(
-        other_id,
-        {
-            "type": "NEW_MESSAGE",
-            "title": "New message received 💬",
-            "message": f"{content[:80]}{'...' if len(content) > 80 else ''}",
-            "link": f"/chat/{conversation_id}",
-            "conversation_id": conversation_id,
-        },
-    )
 
     return msg
 
@@ -233,6 +224,11 @@ async def websocket_chat(
 ):
     """Real-time bi-directional chat socket."""
     # Allow authentication via query param OR secure HttpOnly cookie
+    from app.core.config import settings
+    origin = websocket.headers.get("origin")
+    if origin and origin not in settings.CORS_ORIGINS:
+        await websocket.close(code=1008)
+        return
     auth_token = token
     if not auth_token:
         cookie_token = websocket.cookies.get("access_token")
@@ -244,9 +240,10 @@ async def websocket_chat(
         return
 
     try:
-        user_id = int(decode_access_token(auth_token))
+        subject, version = decode_session(auth_token)
+        user_id = int(subject)
         user = db.query(User).filter(User.id == user_id).first()
-        if not user or user.is_blocked_flag:
+        if not user or user.is_blocked_flag or user.session_version != version:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
     except Exception:
@@ -268,9 +265,27 @@ async def websocket_chat(
     recent_msg_count = 0
     last_typing_time = 0.0
 
+    db.rollback()
     try:
         while True:
-            raw = await websocket.receive_text()
+            try:
+                packet = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+            except asyncio.TimeoutError:
+                packet = None
+            try:
+                _, current_version = decode_session(auth_token)
+                current = db.query(User.session_version, User.is_blocked_flag).filter(User.id == user_id).first()
+                if not current or current[0] != current_version or current[1]:
+                    await websocket.close(code=1008)
+                    break
+            except HTTPException:
+                await websocket.close(code=1008)
+                break
+            finally:
+                db.rollback()
+            if packet is None:
+                continue
+            raw = packet
             try:
                 data = json.loads(raw)
             except Exception:
@@ -287,7 +302,7 @@ async def websocket_chat(
                 last_typing_time = now
                 await manager.broadcast_chat(conversation_id, {
                     "type": "typing",
-                    "sender_id": user.id,
+                    "sender_id": user_id,
                     "is_typing": bool(data.get("is_typing", True)),
                 })
                 continue
@@ -314,7 +329,7 @@ async def websocket_chat(
 
             msg = Message(
                 conversation_id=conversation_id,
-                sender_id=user.id,
+                sender_id=user_id,
                 content=content,
                 image_url=image_url,
             )
@@ -337,17 +352,10 @@ async def websocket_chat(
                 "image_url": msg.image_url,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
             }
+            db.rollback()
             await manager.broadcast_chat(conversation_id, msg_dict)
-            await manager.send_user_notification(
-                other_id,
-                {
-                    "type": "NEW_MESSAGE",
-                    "title": "New message received 💬",
-                    "message": f"{content[:80]}{'...' if len(content) > 80 else ''}",
-                    "link": f"/chat/{conversation_id}",
-                    "conversation_id": conversation_id,
-                },
-            )
     except WebSocketDisconnect:
+        pass
+    finally:
         manager.disconnect_chat(conversation_id, websocket)
 

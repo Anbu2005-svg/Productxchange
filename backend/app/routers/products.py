@@ -2,7 +2,7 @@ import os
 import re
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Response
@@ -23,6 +23,22 @@ from app.models.report import Block
 from app.schemas.product import ProductCreate, ProductUpdate, ProductOut
 
 router = APIRouter(prefix="/products", tags=["products"])
+
+
+LISTING_LIFETIME = timedelta(days=30)
+
+
+def listing_is_expired(product):
+    if not product.created_at:
+        return False
+    created = product.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return created <= discovery_cutoff()
+
+
+def discovery_cutoff():
+    return datetime.now(timezone.utc) - LISTING_LIFETIME
 
 
 def _is_deal_confirmed(product_id: int, user_id: int, db: Session) -> bool:
@@ -202,7 +218,7 @@ def list_products(
     if min_price is not None and max_price is not None and min_price > max_price:
         raise HTTPException(status_code=400, detail="min_price cannot be greater than max_price")
 
-    query = db.query(Product).filter(Product.status == ProductStatus.ACTIVE)
+    query = db.query(Product).filter(Product.status == ProductStatus.ACTIVE, Product.created_at > discovery_cutoff())
     query = _apply_blocked_filters(query, user, db)
 
     if category:
@@ -283,7 +299,7 @@ def nearby_products(
 
     query = (
         db.query(Product, distance_expr)
-        .filter(Product.status == ProductStatus.ACTIVE)
+        .filter(Product.status == ProductStatus.ACTIVE, Product.created_at > discovery_cutoff())
         .filter(ST_DWithin(Product.location, point, radius_km * 1000))
     )
     query = _apply_blocked_filters(query, user, db)
@@ -354,7 +370,7 @@ def list_campuses(db: Session = Depends(get_db)):
     results = (
         db.query(User.college, func.count(Product.id))
         .join(Product, Product.seller_id == User.id)
-        .filter(Product.status == ProductStatus.ACTIVE)
+        .filter(Product.status == ProductStatus.ACTIVE, Product.created_at > discovery_cutoff())
         .filter(User.college.isnot(None))
         .filter(User.college != "")
         .group_by(User.college)
@@ -395,7 +411,7 @@ def recommended_products(
         )
         category_list = [c[0] for c in bought_categories if c[0]]
 
-    query = db.query(Product).filter(Product.status == ProductStatus.ACTIVE)
+    query = db.query(Product).filter(Product.status == ProductStatus.ACTIVE, Product.created_at > discovery_cutoff())
     if user:
         query = query.filter(Product.seller_id != user.id)
     query = _apply_blocked_filters(query, user, db)
@@ -685,6 +701,7 @@ def unsave_product(product_id: int, user: User = Depends(get_current_user), db: 
     return {"saved": False, "product_id": product_id, "message": "Removed from your campus watchlist"}
 
 
+@router.post("/{product_id}/renew", response_model=ProductOut)
 @router.post("/{product_id}/bump", response_model=ProductOut)
 def bump_product(product_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Refreshes product created_at timestamp to bump listing to the top of recent searches."""
@@ -705,6 +722,7 @@ def bump_product(product_id: int, user: User = Depends(get_current_user), db: Se
             raise HTTPException(status_code=429, detail="Listings can only be bumped once every 24 hours.")
 
     product.created_at = func.now()
+    product.expiry_reminded = False
     db.commit()
     db.refresh(product)
     return _sanitize_product_out(product, user, db)

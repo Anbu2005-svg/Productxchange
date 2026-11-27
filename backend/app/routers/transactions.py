@@ -1,8 +1,9 @@
 import hashlib
 import hmac
 import secrets
+from datetime import timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, File, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db, is_sqlite
@@ -12,7 +13,7 @@ from app.core.rate_limit import check_rate_limit
 from app.models.user import User
 from app.models.product import Product, ProductStatus
 from app.models.transaction import Transaction, TransactionState
-from app.schemas.transaction import TransactionCreate, TransactionAction, TransactionOut, HandshakeVerify
+from app.schemas.transaction import TransactionCreate, TransactionAction, TransactionOut, HandshakeVerify, RentalExtension, RentalDispute, ReportCreate
 from app.services.transaction_service import TransactionService
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -49,6 +50,10 @@ def create_transaction(payload: TransactionCreate, user: User = Depends(get_curr
         raise HTTPException(status_code=404, detail="Product not found")
     if product.status != ProductStatus.ACTIVE:
         raise HTTPException(status_code=400, detail="Cannot transact on an inactive or already sold listing.")
+    from app.routers.products import listing_is_expired
+
+    if listing_is_expired(product):
+        raise HTTPException(status_code=409, detail="The seller needs to renew this listing.")
     if product.seller_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot transact on your own listing")
 
@@ -116,6 +121,10 @@ def create_transaction(payload: TransactionCreate, user: User = Depends(get_curr
 def _get_tx_or_404(tx_id: int, db: Session, for_update: bool = False) -> Transaction:
     query = db.query(Transaction).filter(Transaction.id == tx_id)
     if for_update and not is_sqlite:
+        # Acquire locks in the same order as deal creation, including competing deals.
+        db.query(Product.id).filter(
+            Product.id == db.query(Transaction.product_id).filter(Transaction.id == tx_id).scalar_subquery()
+        ).with_for_update().first()
         query = query.with_for_update()
     tx = query.first()
     if not tx:
@@ -229,3 +238,90 @@ def my_transactions(
 
     items = query.order_by(Transaction.updated_at.desc()).offset(safe_skip).limit(safe_limit).all()
     return [_tx_to_out(t, user) for t in items]
+
+
+def get_rental(tx_id: int, user: User, db: Session, *, active: bool = True):
+    tx = _get_tx_or_404(tx_id, db, for_update=active)
+    _assert_party(tx, user)
+    if tx.state != TransactionState.COMPLETED or tx.rental_due_date is None or (active and tx.rental_returned):
+        raise HTTPException(status_code=409, detail="This operation is unavailable for the rental.")
+    return tx
+
+
+@router.post("/{tx_id}/rental-extension", response_model=TransactionOut)
+def request_extension(tx_id: int, payload: RentalExtension, user: User = Depends(get_current_user),
+                      db: Session = Depends(get_db)):
+    from app.routers.notifications import create_notification
+
+    tx = get_rental(tx_id, user, db)
+    if user.id != tx.buyer_id:
+        raise HTTPException(status_code=403, detail="Only the renter can request an extension.")
+    if tx.rental_extension_days is not None:
+        raise HTTPException(status_code=409, detail="An extension request is already pending.")
+    tx.rental_extension_days = payload.days
+    create_notification(db, tx.seller_id, "RENTAL_EXTENSION", "Rental extension requested",
+                        f"The renter requests {payload.days} additional days.", "/deals")
+    db.commit()
+    return _tx_to_out(tx, user)
+
+
+@router.post("/{tx_id}/rental-extension/{decision}", response_model=TransactionOut)
+def decide_extension(tx_id: int, decision: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.routers.notifications import create_notification
+
+    tx = get_rental(tx_id, user, db)
+    if user.id != tx.seller_id:
+        raise HTTPException(status_code=403, detail="Only the owner can decide on an extension.")
+    if decision not in {"approve", "decline"}:
+        raise HTTPException(status_code=400, detail="Choose approve or decline.")
+    if tx.rental_extension_days is None:
+        raise HTTPException(status_code=409, detail="No extension request is pending.")
+    if decision == "approve":
+        tx.rental_due_date += timedelta(days=tx.rental_extension_days)
+        tx.rental_period_days = (tx.rental_period_days or 30) + tx.rental_extension_days
+    tx.rental_extension_days = None
+    create_notification(db, tx.buyer_id, "RENTAL_EXTENSION", "Rental extension updated",
+                        f"The owner chose to {decision} your request.", "/deals")
+    db.commit()
+    return _tx_to_out(tx, user)
+
+
+@router.post("/{tx_id}/condition-photo")
+def upload_condition_photo(tx_id: int, file: UploadFile = File(...), user: User = Depends(get_current_user),
+                           db: Session = Depends(get_db)):
+    from app.routers.products import _read_bounded_upload, _validate_image_bytes
+
+    tx = get_rental(tx_id, user, db)
+    content = _read_bounded_upload(file.file, 2 * 1024 * 1024)
+    if file.content_type != "image/jpeg" or not _validate_image_bytes(content, ".jpg"):
+        raise HTTPException(status_code=400, detail="Upload a JPEG condition photo.")
+    if user.id == tx.buyer_id:
+        tx.buyer_condition_photo = content
+    else:
+        tx.seller_condition_photo = content
+    db.commit()
+    return {"uploaded": True}
+
+
+@router.get("/{tx_id}/condition-photo/{party}")
+def get_condition_photo(tx_id: int, party: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    tx = get_rental(tx_id, user, db, active=False)
+    content = None
+    if party == "renter":
+        content = tx.buyer_condition_photo
+    elif party == "owner":
+        content = tx.seller_condition_photo
+    if not content:
+        raise HTTPException(status_code=404, detail="Condition photo not found.")
+    return Response(content, media_type="image/jpeg", headers={"Cache-Control": "private, no-store"})
+
+
+@router.post("/{tx_id}/rental-dispute")
+def report_rental_dispute(tx_id: int, payload: RentalDispute, user: User = Depends(get_current_user),
+                          db: Session = Depends(get_db)):
+    from app.routers.trust import create_report
+
+    tx = get_rental(tx_id, user, db, active=False)
+    other_user = tx.seller_id if user.id == tx.buyer_id else tx.buyer_id
+    return create_report(ReportCreate(reported_user_id=other_user, reason="Rental dispute",
+                                     details=f"Rental #{tx.id}: {payload.details}"), user, db)

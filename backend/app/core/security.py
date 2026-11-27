@@ -121,15 +121,15 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(subject: str, expires_delta: Optional[timedelta] = None, session_version: int = 0) -> str:
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    payload = {"sub": subject, "exp": expire, "jti": secrets.token_hex(16)}
+    payload = {"sub": subject, "exp": expire, "jti": secrets.token_hex(16), "sv": session_version}
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
-def decode_access_token(token: str) -> str:
+def decode_session(token: str) -> tuple[str, int]:
     if is_token_revoked(token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -139,15 +139,19 @@ def decode_access_token(token: str) -> str:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
         user_id: str = payload.get("sub")
-        if user_id is None:
+        if user_id is None or payload.get("purpose") or not payload.get("jti") or type(payload.get("sv", 0)) is not int:
             raise JWTError()
-        return user_id
+        return user_id, payload.get("sv", 0)
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def decode_access_token(token: str) -> str:
+    return decode_session(token)[0]
 
 
 def _extract_token(request: Request, header_token: Optional[str]) -> Optional[str]:
@@ -175,7 +179,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user_id = decode_access_token(raw_token)
+    user_id, version = decode_session(raw_token)
     try:
         uid = int(user_id)
     except (ValueError, TypeError):
@@ -185,7 +189,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     user = db.query(User).filter(User.id == uid).first()
-    if user is None:
+    if user is None or user.session_version != version:
         raise HTTPException(status_code=401, detail="User not found")
     if user.is_blocked_flag:
         raise HTTPException(status_code=403, detail="User account is suspended")
@@ -201,10 +205,10 @@ def get_optional_current_user(
     if not raw_token:
         return None
     try:
-        user_id = decode_access_token(raw_token)
+        user_id, version = decode_session(raw_token)
         uid = int(user_id)
         user = db.query(User).filter(User.id == uid).first()
-        if user and not user.is_blocked_flag:
+        if user and user.session_version == version and not user.is_blocked_flag:
             return user
     except Exception:
         return None

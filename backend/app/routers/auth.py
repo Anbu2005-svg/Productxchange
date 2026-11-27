@@ -318,7 +318,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(subject=str(user.id))
+    token = create_access_token(subject=str(user.id), session_version=user.session_version)
     _set_auth_cookie(response, token)
     return TokenResponse(access_token=token)
 
@@ -344,7 +344,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         )
 
     _record_login_success(clean_email)
-    token = create_access_token(subject=str(user.id))
+    token = create_access_token(subject=str(user.id), session_version=user.session_version)
     _set_auth_cookie(response, token)
     return TokenResponse(access_token=token)
 
@@ -683,7 +683,12 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     if decoded.get("h") != user.password_hash[-10:]:
         raise HTTPException(status_code=400, detail="This reset link has already been used.")
 
-    user.password_hash = hash_password(payload.new_password)
+    updated = db.query(User).filter(User.id == user.id, User.password_hash == user.password_hash).update({
+        User.password_hash: hash_password(payload.new_password),
+        User.session_version: User.session_version + 1,
+    })
+    if updated != 1:
+        raise HTTPException(status_code=400, detail="This reset link has already been used.")
     db.commit()
     return {"message": "Password reset successfully. You may now log in with your new password."}
 

@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/register"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow Next.js internals, API proxy, uploaded images, PWA assets, and favicons
@@ -14,14 +14,14 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/icons") ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.json" ||
+    pathname === "/offline.html" ||
     pathname === "/sw.js"
   ) {
     return NextResponse.next();
   }
 
   const token =
-    request.cookies.get("px_token")?.value ||
-    request.cookies.get("access_token")?.value;
+    request.cookies.get("px_session")?.value;
 
   const isPublicPath = PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
@@ -37,7 +37,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Authenticated user attempting to visit login/register -> redirect to homepage
-  if (token && isPublicPath) {
+  if (token && isPublicPath && !request.nextUrl.searchParams.has("reset_token")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 

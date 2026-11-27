@@ -6,11 +6,25 @@
 
 ---
 
+## Marketplace reliability update
+
+- **Deals** reserve an available listing atomically and cancel competing negotiations. Repeating confirmation, completion, or owner return leaves the result intact. PostgreSQL enforces one confirmed deal per listing with a partial unique index.
+- **Accounts** use the server-set HttpOnly cookie for browser API requests and WebSockets. The browser-readable marker only controls page navigation. Set the frontend and API on the same site, and include the frontend origin in FastAPI's CORS configuration. For local development, use the same hostname on both ports, such as localhost.
+- **Listings** leave discovery after 30 days and stop accepting new offers until the owner renews. A reminder appears in the notification bell within seven days of expiry. On the listing page, **Renew listing** starts a new 30-day window and follows the existing 24-hour cooldown. Existing negotiations can still be completed.
+- **Rentals** get a reminder within two days of their current due date. The renter can request more days and the owner can approve or decline. The owner confirms receipt before relisting. If the listing expired during the rental, the return starts a new 30-day window. Each participant can store one private JPEG of up to 2 MB and file a dispute for moderation.
+- **Web Push** uses the existing browser subscription keys to encrypt payloads. Configure VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT in the backend environment with a matching P-256 key pair and a mailto or HTTPS subject. The public key is the URL-safe base64 uncompressed point. The private key can be a URL-safe base64 32-byte scalar or a supported key file. Browser push needs HTTPS outside localhost and remains unavailable until configured. Persisted in-app notifications are available when push is disabled or its in-process queue is full.
+- **Real-time delivery** shares chat and notification events through Redis. Set the same REDIS_URL for all backend processes. With Redis unavailable, each worker still serves its own connections. The API remains the source of truth for events missed while disconnected.
+- **Database** uses fixed-scale amounts on PostgreSQL and versioned revisions for its schema. Back up and restore to a disposable database before applying migrations to an existing environment. From backend, run python -m alembic upgrade head against a configured PostgreSQL/PostGIS database before starting FastAPI. Reconcile any duplicate confirmed deals before applying the unique index. For a database bootstrapped before Alembic, reconcile its schema and version history before running the migration. Local SQLite retains its development bootstrap.
+
+With Node.js 24, run npm ci and npm run build from frontend. Run python -m pytest -q from backend with a disposable local database. CI also exercises competing confirmations against PostgreSQL and restores a database dump into a separate database. Set PX_TEST_POSTGRES=1 and DATABASE_URL for the PostgreSQL concurrency test when a disposable PostgreSQL/PostGIS instance is available.
+
+Local verification covered the production build, Chromium login and cookie-based WebSockets, and the backend flows for reservations, listing renewal, rentals, and sessions. Alembic SQL was executed in a local PGlite/PostGIS database, including a backup and restore rehearsal. Web Push encryption was checked without contacting a delivery provider, and cross-worker routing was checked with a test relay. Native PostgreSQL concurrency still requires a PostgreSQL service, and browser push delivery requires VAPID credentials and a live browser subscription.
+
 ## Executive Summary & Abstract
 
 **ProductXchange** is an enterprise-grade, decentralized, location-first peer-to-peer student marketplace engineered specifically for college and university ecosystems. Built to empower academic circular economies, it enables verified college students to buy, sell, exchange, rent, and donate campus essentials (academic textbooks, lab coats, dissection kits, scientific calculators, development boards, laptops, dorm accessories, and campus bicycles).
 
-The platform addresses core student-marketplace vulnerabilities: stranger danger, dorm room location leakage, offer ghosting, exit scams, and counterfeit uploads. By incorporating **Privacy-by-Design spatial coordinate fuzzing**, an **interactive counterparty negotiation state machine**, **cryptographic 6-digit Handshake PIN verification**, **two-way mutual blocking**, **AI-assisted multimodal listing extraction**, a **client-side live WebRTC ISBN/Barcode scanner**, **direct NPCI UPI payments & vector QR code generation**, and a **100% W3C-compliant Progressive Web App (PWA)**, ProductXchange delivers an ultra-fast, mobile-first experience hardened to support **50 Lakh (5 Million) concurrent campus users**.
+The platform addresses core student-marketplace vulnerabilities: stranger danger, dorm room location leakage, offer ghosting, exit scams, and counterfeit uploads. By incorporating **Privacy-by-Design spatial coordinate fuzzing**, an **interactive counterparty negotiation state machine**, **cryptographic 6-digit Handshake PIN verification**, **two-way mutual blocking**, **AI-assisted multimodal listing extraction**, a **client-side live WebRTC ISBN/Barcode scanner**, **direct NPCI UPI payments & vector QR code generation**, and a **100% W3C-compliant Progressive Web App (PWA)**, ProductXchange delivers an ultra-fast, mobile-first experience with database indexes, pagination, and rate limits. Concurrent capacity requires load testing.
 
 ---
 
@@ -94,8 +108,8 @@ This section chronicles the complete engineering trajectory of ProductXchange ba
 
 ### 1. Authentication, Onboarding & Campus Trust Profile
 - **How It Works**:
-  - **Edge Route Gating**: Next.js Edge Middleware (`frontend/src/middleware.ts`) inspects session cookies on all incoming HTTP requests. Any unauthenticated access to `/`, `/deals`, `/chat`, `/listings`, `/saved`, `/profile`, `/impact`, or `/admin` is cleanly redirected to `/login` with an encrypted `next` destination parameter.
-  - **Dual-Token Session Flow**: Upon login, FastAPI returns an `access_token` and `refresh_token` stored in `httpOnly`, `SameSite=Lax` cookies, preventing JavaScript XSS token exfiltration.
+  - **Login-first routing** uses the non-sensitive session marker in Next.js Proxy. FastAPI validates the session on protected requests.
+  - **Browser authentication** uses the FastAPI HttpOnly access cookie. Password reset revokes prior sessions, and browser mutations and WebSockets check the request origin.
   - **Institutional Domain Verification**: Student emails (`.edu`, `.ac.in`) are case-normalized and verified with 6-digit cryptographic OTPs with exponential backoff and rate limiting to prevent email/SMS abuse.
   - **Trust Badge & Trust Score**: Each user profile calculates an algorithmic trust score ($0-100\%$) based on verified campus email status, completed transaction count, and average verified review ratings.
 
@@ -139,7 +153,7 @@ This section chronicles the complete engineering trajectory of ProductXchange ba
 
 ### 7. Asynchronous Non-Blocking Web Push Notifications
 - **How It Works**:
-  - **0ms HTTP Overhead (`backend/app/services/push_service.py`)**: Web Push notifications are dispatched on a dedicated background worker thread, ensuring user API requests finish in 0ms without waiting for push servers.
+  - **Browser Web Push** delivers encrypted payloads with VAPID from a bounded background queue after the in-app notification commits.
   - **Multi-Event Notification Hooks**: Dispatched automatically when an offer is proposed, countered, accepted, when a Handshake Pass unlocks, or when a new chat message arrives.
   - **SSRF Protection & Auto-Pruning**: Only verified public Web Push endpoints (Mozilla, Google FCM, Apple APNs, Microsoft WNS) are permitted. Expired or unregistered push subscriptions (HTTP 410 Gone / HTTP 404) are automatically purged from the database.
 
@@ -148,7 +162,7 @@ This section chronicles the complete engineering trajectory of ProductXchange ba
   - **Temporal Rental Modeling**: Products flagged as `RENT` allow buyers to specify rental periods (e.g. 7 days, 30 days, semester).
   - **Automated Lifecycle Transitions**:
     $$\text{ACTIVE} \longrightarrow \text{RENTED} \longrightarrow \text{RETURNED} \longrightarrow \text{ACTIVE}$$
-  - When the rental period ends, counterparties confirm return condition, restoring the item to the active campus catalog for the next cohort.
+  - The owner confirms receipt before the listing becomes active again. Renters can request an extension, both parties can upload a private condition photo, and rental disputes enter the existing moderation queue.
 
 ### 9. Student Trust, Verified Reviews & Two-Way Mutual Blocking
 - **How It Works**:
@@ -169,7 +183,7 @@ This section chronicles the complete engineering trajectory of ProductXchange ba
     - Kilograms of $\text{CO}_2\text{e}$ emissions prevented by diverting manufacturing.
     - Campus textbook paper and water conserved.
     - Total student money saved compared to retail purchasing.
-  - **60-Second In-Memory TTL Cache**: Aggregates platform-wide green impact metrics with a 60-second cache, guaranteeing sub-5ms response times under 50 Lakh user traffic.
+  - **60-Second In-Memory TTL Cache**: Aggregates platform-wide green impact metrics with a 60-second cache, to reduce repeated aggregation queries.
 
 ### 12. Progressive Web App (PWA) & Mobile Web App Excellence
 - **How It Works**:
@@ -435,7 +449,7 @@ The project is backed by **200 automated tests across 24 test modules** with a *
 ```
 ProductXchange Architecture
 ├── Client Tier (Frontend PWA)
-│   ├── Next.js 14 (App Router) + React 18 + TypeScript
+│   ├── Next.js 16 (App Router) + React 19 + TypeScript
 │   ├── Tailwind CSS + CSS Variable Design Tokens (Light/Dark Mode)
 │   ├── 9 Shared UI Primitives (Button, Input, Select, Badge, Card, Modal, Tabs...)
 │   ├── Live WebRTC Barcode/ISBN Scanner + OpenLibrary API (isbn.ts)
@@ -493,10 +507,10 @@ productxchange/
 │   │   ├── sw.js             # Service Worker v2 (caching, offline fallback, push)
 │   │   └── offline.html      # Standalone branded offline experience
 │   ├── src/
-│   │   ├── app/              # Next.js 14 App Router pages (13 routes + Edge Middleware)
+│   │   ├── app/              # Next.js 16 App Router pages
 │   │   ├── components/       # UI components (MobileBottomNav, PwaInstallPrompt, BarcodeScannerModal, UpiPaymentModal)
 │   │   │   └── ui/           # 9 Shared UI Primitives (Button, Input, Select, Badge, Card, Modal...)
-│   │   ├── middleware.ts     # Next.js Edge Middleware for login-first route gating
+│   │   ├── proxy.ts          # Login-first routing
 │   │   └── lib/              # Client API helper, ISBN lookup, UPI builder & QR matrix generator
 │   ├── package.json          # Node dependencies and scripts
 │   └── tailwind.config.js    # Design system configuration

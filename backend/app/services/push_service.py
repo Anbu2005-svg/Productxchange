@@ -1,20 +1,17 @@
-"""
-Asynchronous Web Push Notification Service for ProductXchange
-
-Dispatches Web Push notifications to registered student browser subscriptions.
-Designed for high concurrency:
-- Non-blocking execution via background worker threads (0ms overhead on API routes).
-- SSRF and DNS-rebinding security verification on all push service endpoints.
-- Auto-prunes expired (HTTP 404/410) push subscription endpoints.
-"""
+"""Send encrypted browser push notifications from a bounded worker queue."""
 
 import json
 import logging
 import threading
-from typing import Dict, Any, Optional
-import httpx
+from typing import Any, Dict
+from concurrent.futures import ThreadPoolExecutor
+from time import sleep
 
-from app.core.database import SessionLocal, is_sqlite
+from pywebpush import WebPushException, webpush
+from requests.exceptions import RequestException
+from app.core.config import settings
+
+from app.core.database import SessionLocal
 from app.models.notification import PushSubscription
 
 logger = logging.getLogger("productxchange.push")
@@ -46,71 +43,74 @@ def _is_safe_push_endpoint(endpoint: str) -> bool:
     return False
 
 
+def push_enabled() -> bool:
+    return bool(settings.VAPID_PUBLIC_KEY and settings.VAPID_PRIVATE_KEY and settings.VAPID_SUBJECT)
+
+
 def _send_push_worker(user_id: int, payload: Dict[str, Any]):
-    """Background worker that queries active subscriptions and dispatches push packets."""
-    db = SessionLocal()
-    try:
-        subs = db.query(PushSubscription).filter(PushSubscription.user_id == user_id).all()
-        if not subs:
-            return
-
-        payload_bytes = json.dumps(payload).encode("utf-8")
-        headers = {
-            "Content-Type": "application/json",
-            "TTL": "86400",  # 24 hour time to live
-            "Urgency": "normal",
-        }
-
-        expired_sub_ids = []
-
-        with httpx.Client(timeout=6.0) as client:
-            for sub in subs:
-                endpoint = sub.endpoint or ""
-                # Allow simulated local endpoints for automated testing
-                if endpoint.startswith("browser-direct-") or endpoint.startswith("test-"):
-                    logger.debug(f"[PUSH SIMULATED] Delivered to {endpoint} for user {user_id}")
-                    continue
-
-                if not _is_safe_push_endpoint(endpoint):
-                    logger.warning(f"[PUSH BLOCKED] Disallowed or unsafe endpoint: {endpoint}")
-                    continue
-
-                try:
-                    res = client.post(endpoint, content=payload_bytes, headers=headers)
-                    # HTTP 404 or 410 indicates the push token expired or was unsubscribed by the browser
-                    if res.status_code in (404, 410):
-                        expired_sub_ids.append(sub.id)
-                        logger.info(f"[PUSH PRUNED] Subscription {sub.id} expired with HTTP {res.status_code}")
-                    elif res.status_code in (200, 201, 202):
-                        logger.info(f"[PUSH DELIVERED] User {user_id} via {endpoint[:40]}...")
-                    else:
-                        logger.debug(f"[PUSH STATUS {res.status_code}] Endpoint response for user {user_id}")
-                except Exception as ex:
-                    logger.debug(f"[PUSH SEND EXCEPTION] {ex} for user {user_id}")
-
-        # Clean up stale or expired subscriptions to maintain lean database tables
-        if expired_sub_ids:
+    with SessionLocal() as db:
+        subscriptions = db.query(PushSubscription).filter(PushSubscription.user_id == user_id).all()
+        db.expunge_all()
+    for sub in subscriptions:
+        if not (_is_safe_push_endpoint(sub.endpoint) and sub.p256dh and sub.auth):
+            continue
+        for attempt in range(3):
             try:
-                db.query(PushSubscription).filter(PushSubscription.id.in_(expired_sub_ids)).delete(synchronize_session=False)
-                db.commit()
-            except Exception:
-                db.rollback()
+                webpush(
+                    {"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}},
+                    data=json.dumps(payload),
+                    vapid_private_key=settings.VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": settings.VAPID_SUBJECT},
+                    ttl=86400,
+                    timeout=6,
+                )
+                logger.info("Web Push accepted for subscription %s", sub.id)
+                break
+            except WebPushException as exc:
+                status = exc.response.status_code if exc.response is not None else None
+                if status in (404, 410):
+                    with SessionLocal() as db:
+                        db.query(PushSubscription).filter(
+                            PushSubscription.id == sub.id,
+                            PushSubscription.user_id == user_id,
+                            PushSubscription.p256dh == sub.p256dh,
+                            PushSubscription.auth == sub.auth,
+                        ).delete()
+                        db.commit()
+                    break
+                if status not in (None, 429, 500, 502, 503, 504) or attempt == 2:
+                    logger.warning("Web Push failed for subscription %s (%s)", sub.id, status)
+                    break
+                sleep(2 ** attempt)
+            except RequestException as exc:
+                if attempt < 2:
+                    sleep(2 ** attempt)
+                    continue
+                logger.warning("Web Push network failure for subscription %s (%s)", sub.id, type(exc).__name__)
+                break
+            except Exception as exc:
+                logger.warning("Web Push failed for subscription %s (%s)", sub.id, type(exc).__name__)
+                break
 
-    except Exception as e:
-        logger.error(f"Error in background push dispatch for user {user_id}: {e}")
-    finally:
-        db.close()
+
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="WebPush")
+_pending = threading.BoundedSemaphore(100)
 
 
 def dispatch_push_async(user_id: int, payload: Dict[str, Any]):
-    """
-    Fire-and-forget asynchronous dispatch of Web Push notification.
-    Guarantees 0ms latency impact on the caller HTTP thread.
-    """
-    thread = threading.Thread(
-        target=_send_push_worker,
-        args=(user_id, payload),
-        daemon=True,
-        name=f"PushDispatch-{user_id}"
-    )
-    thread.start()
+    if not push_enabled():
+        return
+    if not _pending.acquire(blocking=False):
+        logger.warning("Web Push queue is full for user %s", user_id)
+        return
+    try:
+        future = _executor.submit(_send_push_worker, user_id, payload)
+    except RuntimeError:
+        _pending.release()
+        return
+    def on_finish(result):
+        _pending.release()
+        if result.exception():
+            logger.error("Web Push worker failed for user %s (%s)", user_id, type(result.exception()).__name__)
+
+    future.add_done_callback(on_finish)

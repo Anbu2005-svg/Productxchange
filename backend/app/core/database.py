@@ -3,6 +3,7 @@ import math
 import sqlite3
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.ext.compiler import compiles
 from geoalchemy2 import Geography
 from sqlalchemy.types import ARRAY
@@ -71,7 +72,7 @@ def register_sqlite_functions(dbapi_connection, connection_record=None):
 is_sqlite = settings.DATABASE_URL.startswith("sqlite")
 if is_sqlite:
     connect_args = {"check_same_thread": False}
-    engine_kwargs = {}
+    engine_kwargs = {"poolclass": StaticPool} if settings.DATABASE_URL in {"sqlite://", "sqlite:///:memory:"} else {}
 else:
     connect_args = {}
     engine_kwargs = {
@@ -106,29 +107,10 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db():
-    """Initializes database extensions (PostGIS, pgvector on Supabase) and creates all tables."""
-    try:
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            if not is_sqlite:
-                # Enable PostGIS extension for geo-spatial queries
-                try:
-                    conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
-                    conn.commit()
-                except Exception:
-                    pass
-                # Enable pgvector extension for AI embeddings
-                try:
-                    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-                    conn.commit()
-                except Exception:
-                    pass
-        # Auto-create all tables across SQLite and Supabase PostgreSQL
+    """Bootstrap local SQLite. PostgreSQL is migrated by Alembic before startup."""
+    if is_sqlite:
         Base.metadata.create_all(bind=engine)
-    except Exception:
-        pass
-
-    ensure_schema_migrations()
+        ensure_schema_migrations()
 
 
 def ensure_schema_migrations():
@@ -139,11 +121,15 @@ def ensure_schema_migrations():
             if is_sqlite:
                 result = conn.execute(text("PRAGMA table_info(users)")).fetchall()
                 cols = [r[1] for r in result]
+                if "session_version" not in cols and cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0"))
                 if "avatar_url" not in cols and len(cols) > 0:
                     conn.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR"))
 
                 prod_result = conn.execute(text("PRAGMA table_info(products)")).fetchall()
                 prod_cols = [r[1] for r in prod_result]
+                if "expiry_reminded" not in prod_cols and prod_cols:
+                    conn.execute(text("ALTER TABLE products ADD COLUMN expiry_reminded BOOLEAN NOT NULL DEFAULT 0"))
                 if "has_3d" not in prod_cols and len(prod_cols) > 0:
                     conn.execute(text("ALTER TABLE products ADD COLUMN has_3d BOOLEAN DEFAULT 0"))
                 if "image_angles" not in prod_cols and len(prod_cols) > 0:
@@ -163,6 +149,14 @@ def ensure_schema_migrations():
                 # Auto-migrate rental fields on transactions
                 tx_result = conn.execute(text("PRAGMA table_info(transactions)")).fetchall()
                 tx_cols = [r[1] for r in tx_result]
+                if "rental_reminder_for" not in tx_cols and tx_cols:
+                    conn.execute(text("ALTER TABLE transactions ADD COLUMN rental_reminder_for TIMESTAMP"))
+                if "rental_extension_days" not in tx_cols and tx_cols:
+                    conn.execute(text("ALTER TABLE transactions ADD COLUMN rental_extension_days INTEGER"))
+                if "buyer_condition_photo" not in tx_cols and tx_cols:
+                    conn.execute(text("ALTER TABLE transactions ADD COLUMN buyer_condition_photo BLOB"))
+                if "seller_condition_photo" not in tx_cols and tx_cols:
+                    conn.execute(text("ALTER TABLE transactions ADD COLUMN seller_condition_photo BLOB"))
                 if "rental_returned" not in tx_cols and len(tx_cols) > 0:
                     conn.execute(text("ALTER TABLE transactions ADD COLUMN rental_returned BOOLEAN DEFAULT 0"))
                 if "rental_return_date" not in tx_cols and len(tx_cols) > 0:
@@ -181,36 +175,9 @@ def ensure_schema_migrations():
                     )
                 """))
                 conn.commit()
-            else:
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR;"))
-                conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS has_3d BOOLEAN DEFAULT FALSE;"))
-                conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS image_angles TEXT;"))
-                conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS push_subscriptions (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                        endpoint TEXT NOT NULL UNIQUE,
-                        p256dh TEXT,
-                        auth TEXT,
-                        created_at TIMESTAMPTZ DEFAULT NOW()
-                    );
-                """))
-                conn.execute(text("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rental_returned BOOLEAN DEFAULT FALSE;"))
-                conn.execute(text("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rental_return_date TIMESTAMPTZ;"))
-                conn.execute(text("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rental_due_date TIMESTAMPTZ;"))
-                conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS saved_products (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-                        created_at TIMESTAMPTZ DEFAULT NOW(),
-                        UNIQUE(user_id, product_id)
-                    );
-                """))
-                conn.commit()
-
-            # High-concurrency composite indexes (5M users scale)
+            # Keep indexes in older SQLite databases aligned with the models.
             index_sqls = [
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_confirmed_deal_per_product ON transactions(product_id) WHERE state = 'CONFIRMED'",
                 "CREATE INDEX IF NOT EXISTS ix_products_status_created_at ON products(status, created_at)",
                 "CREATE INDEX IF NOT EXISTS ix_products_status_category ON products(status, category)",
                 "CREATE INDEX IF NOT EXISTS ix_products_seller_status ON products(seller_id, status)",

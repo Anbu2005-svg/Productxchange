@@ -1,13 +1,14 @@
+import asyncio
 import ipaddress
 from typing import Optional, Dict, Any
 from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Query, status, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from app.core.database import get_db, is_sqlite
-from app.core.security import get_current_user, decode_access_token
+from app.core.security import get_current_user, decode_session
 from app.core.rate_limit import check_rate_limit
 from app.core.websocket import manager
 from app.models.user import User
@@ -92,34 +93,30 @@ def create_notification(db: Session, user_id: int, type: str, title: str, messag
     db.add(notif)
     # Don't commit here — let the caller commit as part of their transaction
 
-    # Real-time WebSocket dispatch
-    import anyio
-    try:
-        from app.core.websocket import manager
-        payload = {
-            "type": type,
-            "title": title,
-            "message": message,
-            "link": link or "/deals",
-            "deal_update": True,
-        }
-        anyio.from_thread.run(manager.send_user_notification, user_id, payload)
-    except Exception:
-        pass
+    db.info.setdefault("notifications_to_deliver", []).append((user_id, {
+        "type": type,
+        "title": title,
+        "message": message,
+        "link": link,
+        "deal_update": True,
+    }))
 
-    # Asynchronous Web Push notification dispatch (background thread, 0ms blocking)
-    try:
-        from app.services.push_service import dispatch_push_async
-        push_packet = {
-            "title": title,
-            "body": message or "You have an update on ProductXchange.",
-            "url": link or "/deals",
-            "icon": "/icons/icon-192x192.png",
-            "type": type,
-        }
-        dispatch_push_async(user_id, push_packet)
-    except Exception:
-        pass
+
+@event.listens_for(Session, "after_commit")
+def deliver_committed_notifications(db):
+    from app.services.push_service import dispatch_push_async
+
+    for user_id, payload in db.info.pop("notifications_to_deliver", []):
+        manager.schedule_user_notification(user_id, payload)
+        dispatch_push_async(user_id, {
+            "type": payload["type"], "title": payload["title"],
+            "body": payload["message"], "url": payload["link"],
+        })
+
+
+@event.listens_for(Session, "after_rollback")
+def discard_rolled_back_notifications(db):
+    db.info.pop("notifications_to_deliver", None)
 
 
 @router.get("")
@@ -172,6 +169,11 @@ async def websocket_notifications(
     db: Session = Depends(get_db),
 ):
     """Real-time push notifications socket."""
+    from app.core.config import settings
+    origin = websocket.headers.get("origin")
+    if origin and origin not in settings.CORS_ORIGINS:
+        await websocket.close(code=1008)
+        return
     auth_token = token
     if not auth_token:
         cookie_token = websocket.cookies.get("access_token")
@@ -183,9 +185,10 @@ async def websocket_notifications(
         return
 
     try:
-        user_id = int(decode_access_token(auth_token))
+        subject, version = decode_session(auth_token)
+        user_id = int(subject)
         user = db.query(User).filter(User.id == user_id).first()
-        if not user or user.is_blocked_flag:
+        if not user or user.is_blocked_flag or user.session_version != version:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
     except Exception:
@@ -193,21 +196,44 @@ async def websocket_notifications(
         return
 
     await manager.connect_user(user.id, websocket)
+    db.rollback()
     try:
         while True:
-            data = await websocket.receive_text()
+            try:
+                packet = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+            except asyncio.TimeoutError:
+                packet = None
+            try:
+                _, current_version = decode_session(auth_token)
+                current = db.query(User.session_version, User.is_blocked_flag).filter(User.id == user_id).first()
+                if not current or current[0] != current_version or current[1]:
+                    await websocket.close(code=1008)
+                    break
+            except HTTPException:
+                await websocket.close(code=1008)
+                break
+            finally:
+                db.rollback()
+            if packet is None:
+                continue
+            data = packet
             if data == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
-        manager.disconnect_user(user.id, websocket)
+        pass
+    finally:
+        manager.disconnect_user(user_id, websocket)
 
 
 @router.get("/push-config")
 def get_push_config():
     """Returns Web Push service configuration and public key for browser subscription."""
+    from app.services.push_service import push_enabled
+    from app.core.config import settings
+
     return {
-        "enabled": True,
-        "publicKey": "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U",
+        "enabled": push_enabled(),
+        "publicKey": settings.VAPID_PUBLIC_KEY,
         "service": "web-push-pwa",
     }
 
@@ -225,7 +251,7 @@ def subscribe_push(
     # Security: Validate push endpoint to protect against SSRF and internal scanning
     _validate_push_endpoint(payload.endpoint)
 
-    # Save to in-memory store for instantaneous push dispatch
+    # Retain the subscription lookup cache for existing callers.
     # Remove endpoint from other users' lists if device was reassigned / relogged
     for uid, sub_list in list(_push_subscriptions.items()):
         if uid != user.id:
@@ -270,8 +296,9 @@ def subscribe_push(
                 {"user_id": user.id, "endpoint": payload.endpoint, "p256dh": payload.p256dh, "auth": payload.auth},
             )
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        raise HTTPException(status_code=503, detail="Could not save the push subscription.") from exc
 
     return {"status": "subscribed", "endpoint": payload.endpoint}
 
@@ -304,28 +331,6 @@ async def send_test_push(
         link=test_link,
     )
     db.commit()
-
-    # Dispatch via active WebSocket connection if online
-    await manager.send_user_notification(user.id, {
-        "type": "PUSH_ALERT",
-        "title": test_title,
-        "body": test_message,
-        "link": test_link,
-        "icon": "/icons/icon-192x192.png",
-    })
-
-    # Dispatch via background Web Push
-    try:
-        from app.services.push_service import dispatch_push_async
-        dispatch_push_async(user.id, {
-            "title": test_title,
-            "body": test_message,
-            "url": test_link,
-            "icon": "/icons/icon-192x192.png",
-            "type": "PUSH_TEST",
-        })
-    except Exception:
-        pass
 
     from app.models.notification import PushSubscription
     subs_count = db.query(PushSubscription).filter(PushSubscription.user_id == user.id).count()

@@ -101,7 +101,7 @@ export default function ChatThreadPage() {
         const apiBase = API_BASE;
         const wsProto = apiBase.startsWith("https") ? "wss" : "ws";
         const wsHost = apiBase.replace(/^https?:\/\//, "");
-        const wsUrl = `${wsProto}://${wsHost}/chat/ws/${conversationId}?token=${encodeURIComponent(token)}`;
+        const wsUrl = `${wsProto}://${wsHost}/chat/ws/${conversationId}`;
 
         ws = new WebSocket(wsUrl);
         wsRef.current = ws;

@@ -80,7 +80,8 @@ def test_push_notification_endpoints(client, auth_headers_a):
     cfg_res = client.get("/notifications/push-config")
     assert cfg_res.status_code == 200
     cfg = cfg_res.json()
-    assert cfg["enabled"] is True
+    from app.services.push_service import push_enabled
+    assert cfg["enabled"] is push_enabled()
     assert "publicKey" in cfg
 
     # 2. Register push subscription

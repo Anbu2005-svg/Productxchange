@@ -1,6 +1,6 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
-const TOKEN_KEY = "px_token";
+const TOKEN_KEY = "px_session";
 const TOKEN_EXPIRY_DAYS = 7;
 
 function setCookie(name: string, value: string, days: number) {
@@ -24,9 +24,10 @@ export function getToken(): string | null {
   return getCookie(TOKEN_KEY);
 }
 
-export function setToken(token: string) {
+export function setToken() {
   if (typeof window === "undefined") return;
-  setCookie(TOKEN_KEY, token, TOKEN_EXPIRY_DAYS);
+  setCookie(TOKEN_KEY, "1", TOKEN_EXPIRY_DAYS);
+  deleteCookie("px_token");
   // Clear any legacy localStorage token to prevent XSS exfiltration
   try {
     localStorage.removeItem(TOKEN_KEY);
@@ -36,6 +37,7 @@ export function setToken(token: string) {
 export function removeToken() {
   if (typeof window === "undefined") return;
   deleteCookie(TOKEN_KEY);
+  deleteCookie("px_token");
   try {
     localStorage.removeItem(TOKEN_KEY);
   } catch {}
@@ -102,7 +104,6 @@ export function getCategoryFallbackImage(category?: string | null): string {
 }
 
 export async function api(path: string, options: RequestInit = {}) {
-  const token = getToken();
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
 
   const headers: Record<string, string> = {
@@ -110,7 +111,6 @@ export async function api(path: string, options: RequestInit = {}) {
     ...(options.headers as Record<string, string> | undefined),
   };
 
-  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -119,6 +119,11 @@ export async function api(path: string, options: RequestInit = {}) {
   });
 
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined" && !["/login", "/register"].includes(window.location.pathname)) {
+      removeToken();
+      const redirect = window.location.pathname + window.location.search;
+      window.location.replace("/login?redirect=" + encodeURIComponent(redirect));
+    }
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `Request failed: ${res.status}`);
   }
@@ -259,6 +264,7 @@ export type Transaction = {
   rental_returned?: boolean;
   rental_return_date?: string | null;
   rental_due_date?: string | null;
+  rental_extension_days?: number | null;
   handshake_pin?: string | null;
   created_at: string;
   updated_at: string;

@@ -1,5 +1,5 @@
-// ProductXchange Progressive Web App Service Worker (v2.0)
-const CACHE_NAME = "px-pwa-v2";
+// ProductXchange Progressive Web App Service Worker (v3.0)
+const CACHE_NAME = "px-pwa-v3";
 const STATIC_PRECACHE = [
   "/",
   "/offline.html",
@@ -42,6 +42,8 @@ self.addEventListener("fetch", (event) => {
   // 1. Bypass all non-GET requests, backend API routes, uploads, and websockets
   if (
     request.method !== "GET" ||
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith("/transactions/") ||
     url.pathname.startsWith("/api/") ||
     url.port === "8000" ||
     url.pathname.startsWith("/uploads/") ||

@@ -72,7 +72,7 @@ export default function NotificationBell() {
         const apiBase = API_BASE;
         const wsProto = apiBase.startsWith("https") ? "wss" : "ws";
         const wsHost = apiBase.replace(/^https?:\/\//, "");
-        const wsUrl = `${wsProto}://${wsHost}/notifications/ws?token=${encodeURIComponent(token)}`;
+        const wsUrl = `${wsProto}://${wsHost}/notifications/ws`;
 
         ws = new WebSocket(wsUrl);
 

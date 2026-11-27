@@ -65,7 +65,7 @@ def test_service_worker_structure():
     # Precache verification
     assert "/offline.html" in content
     assert "/manifest.json" in content
-    assert "px-pwa-v2" in content
+    assert "px-pwa-v3" in content
 
     # Lifecycle events
     assert "addEventListener(\"install\"" in content or "addEventListener('install'" in content

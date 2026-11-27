@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = ""
     SUPABASE_BUCKET: str = "products"
 
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_SUBJECT: str = ""
+
     # Discovery defaults
     DEFAULT_SEARCH_RADIUS_KM: int = 10
     MAX_SEARCH_RADIUS_KM: int = 100

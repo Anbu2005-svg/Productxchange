@@ -1,6 +1,6 @@
 import enum
-from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, func, Enum, Text, Boolean, String, Index
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, Numeric, DateTime, ForeignKey, func, Enum, Text, Boolean, String, Index, LargeBinary, text
+from sqlalchemy.orm import relationship, deferred
 
 from app.core.database import Base
 
@@ -36,6 +36,8 @@ class Transaction(Base):
         Index("ix_transactions_seller_state", "seller_id", "state"),
         Index("ix_transactions_product_state", "product_id", "state"),
         Index("ix_transactions_created_at", "created_at"),
+        Index("uq_confirmed_deal_per_product", "product_id", unique=True,
+              postgresql_where=text("state = 'CONFIRMED'"), sqlite_where=text("state = 'CONFIRMED'")),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -44,7 +46,7 @@ class Transaction(Base):
     seller_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
     state = Column(Enum(TransactionState), default=TransactionState.PENDING, index=True)
-    agreed_price = Column(Float, nullable=True)
+    agreed_price = Column(Numeric(12, 2), nullable=True)
     rental_period_days = Column(Integer, nullable=True)  # for RENT type
     notes = Column(Text, nullable=True)
     buyer_completed = Column(Boolean, default=False, nullable=False)
@@ -54,6 +56,10 @@ class Transaction(Base):
     rental_returned = Column(Boolean, default=False, nullable=False)
     rental_return_date = Column(DateTime(timezone=True), nullable=True)
     rental_due_date = Column(DateTime(timezone=True), nullable=True)
+    rental_reminder_for = Column(DateTime(timezone=True), nullable=True)
+    rental_extension_days = Column(Integer, nullable=True)
+    buyer_condition_photo = deferred(Column(LargeBinary, nullable=True))
+    seller_condition_photo = deferred(Column(LargeBinary, nullable=True))
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -73,7 +79,7 @@ class Offer(Base):
     id = Column(Integer, primary_key=True, index=True)
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False, index=True)
     proposed_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    amount = Column(Float, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
     message = Column(String(1000), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

@@ -26,13 +26,21 @@ jobs:
       - name: Verify database migrations
         working-directory: backend
         run: alembic upgrade head
+      - name: Verify PostgreSQL backup restoration
+        run: |
+          docker exec ${{ job.services.db.id }} pg_dump -U productxchange -Fc -f /tmp/productxchange.dump productxchange
+          docker exec ${{ job.services.db.id }} createdb -U productxchange productxchange_restore
+          docker exec ${{ job.services.db.id }} pg_restore -U productxchange --exit-on-error -d productxchange_restore /tmp/productxchange.dump
+          docker exec ${{ job.services.db.id }} psql -U productxchange -d productxchange_restore -v ON_ERROR_STOP=1 -c "SELECT version_num FROM alembic_version"
       - name: Run automated test suite
         working-directory: backend
+        env:
+          PX_TEST_POSTGRES: "1"
         run: pytest -q
   frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - run: cd frontend && npm install && npm run build
+        with: { node-version: 24 }
+      - run: cd frontend && npm ci && npm audit --audit-level=high && npm run build

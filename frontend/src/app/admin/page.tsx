@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, getToken, resolveImageUrl, API_BASE } from "@/lib/api";
+import { api, resolveImageUrl, API_BASE } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -173,9 +173,7 @@ export default function AdminPage() {
 
   async function downloadCsv(resource: string) {
     try {
-      const token = getToken();
       const res = await fetch(`${API_BASE}/admin/export/${resource}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: "include",
       });
       if (!res.ok) throw new Error("Export download failed");

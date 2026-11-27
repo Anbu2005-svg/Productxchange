@@ -51,11 +51,11 @@ function LoginForm() {
     setError(null);
     setSubmitting(true);
     try {
-      const { access_token } = await api("/auth/login", {
+      await api("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      setToken(access_token);
+      setToken();
       showToast("Signed in successfully", "success");
       const redirect = getSafeRedirectUrl(searchParams.get("redirect"));
       router.push(redirect);

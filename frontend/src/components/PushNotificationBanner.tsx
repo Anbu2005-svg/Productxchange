@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { subscribePush, triggerTestPush, getToken } from "@/lib/api";
+import { subscribePush, triggerTestPush, getPushConfig } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import Button from "@/components/ui/Button";
 import { Bell, X, Check } from "lucide-react";
@@ -12,6 +12,7 @@ export default function PushNotificationBanner() {
   const [dismissed, setDismissed] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
   const [tested, setTested] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) {
@@ -35,33 +36,30 @@ export default function PushNotificationBanner() {
       setPermission(perm);
 
       if (perm === "granted") {
-        showToast("Notifications enabled", "success");
-
-        if ("serviceWorker" in navigator) {
-          try {
-            const reg = await navigator.serviceWorker.ready;
-            const sub = await reg.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey:
-                "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U",
-            });
-
-            const p256dh = sub.getKey("p256dh");
-            const auth = sub.getKey("auth");
-
-            await subscribePush({
-              endpoint: sub.endpoint,
-              p256dh: p256dh ? btoa(String.fromCharCode(...new Uint8Array(p256dh))) : undefined,
-              auth: auth ? btoa(String.fromCharCode(...new Uint8Array(auth))) : undefined,
-            });
-          } catch {
-            if (getToken()) {
-              await subscribePush({
-                endpoint: `browser-direct-${Date.now()}`,
-              });
-            }
+        const config = await getPushConfig();
+        if (!config.enabled || !("serviceWorker" in navigator)) {
+          throw new Error("Browser push is unavailable on this server.");
+        }
+        const reg = await navigator.serviceWorker.ready;
+        let existing = await reg.pushManager.getSubscription();
+        const existingKey = existing?.options.applicationServerKey;
+        if (existing && existingKey) {
+          const encoded = btoa(String.fromCharCode(...new Uint8Array(existingKey)))
+            .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+          if (encoded !== config.publicKey) {
+            await existing.unsubscribe();
+            existing = null;
           }
         }
+        const sub = existing ?? await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: config.publicKey,
+        });
+        const { keys } = sub.toJSON();
+        if (!keys?.p256dh || !keys.auth) throw new Error("Missing browser subscription keys.");
+        await subscribePush({ endpoint: sub.endpoint, p256dh: keys.p256dh, auth: keys.auth });
+        setSubscribed(true);
+        showToast("Notifications enabled", "success");
       } else {
         showToast("Notification permission was not granted", "info");
       }
@@ -74,17 +72,11 @@ export default function PushNotificationBanner() {
 
   async function handleTestAlert() {
     try {
-      if (typeof window !== "undefined" && Notification.permission === "granted") {
-        new Notification("ProductXchange", {
-          body: "Notifications are working for incoming offers and deal confirmations.",
-          icon: "/icons/icon-192x192.png",
-        });
-      }
       await triggerTestPush();
       setTested(true);
       showToast("Test notification sent", "success");
     } catch {
-      showToast("Test notification sent", "info");
+      showToast("Could not send the test notification", "error");
     }
   }
 
@@ -102,14 +94,14 @@ export default function PushNotificationBanner() {
       <div className="flex items-center gap-2">
         <Bell className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.75} />
         <span>
-          {permission === "granted"
+          {subscribed
             ? "Notifications are active for deal updates and physical meetup handovers."
             : "Enable browser notifications to receive alerts when fellow students make offers."}
         </span>
       </div>
 
       <div className="flex items-center gap-2">
-        {permission !== "granted" ? (
+        {!subscribed ? (
           <Button
             type="button"
             variant="primary"

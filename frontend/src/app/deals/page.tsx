@@ -109,7 +109,7 @@ export default function DealsPage() {
         const apiBase = API_BASE;
         const wsProto = apiBase.startsWith("https") ? "wss" : "ws";
         const wsHost = apiBase.replace(/^https?:\/\//, "");
-        const wsUrl = `${wsProto}://${wsHost}/notifications/ws?token=${encodeURIComponent(token!)}`;
+        const wsUrl = `${wsProto}://${wsHost}/notifications/ws`;
 
         ws = new WebSocket(wsUrl);
 
@@ -217,6 +217,16 @@ export default function DealsPage() {
       showToast(e.message || "Invalid or expired handshake PIN", "error");
     } finally {
       setVerifyingHandshake(false);
+    }
+  }
+
+  async function rentalAction(id: number, action: string, body: BodyInit | undefined, success: string) {
+    try {
+      await api("/transactions/" + id + "/" + action, { method: "POST", body });
+      showToast(success, "success");
+      await loadData();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Rental update failed", "error");
     }
   }
 
@@ -641,6 +651,54 @@ export default function DealsPage() {
                           ? "This item has been returned safely and restored to campus active listings."
                           : "Once returned and verified, this item will automatically be relisted for the campus community."}
                       </p>
+
+                      <div className="flex flex-wrap items-center gap-3 text-sm">
+                        {["renter", "owner"].map((party) => (
+                          <a key={party} className="underline" href={API_BASE + "/transactions/" + tx.id + "/condition-photo/" + party}
+                            target="_blank" rel="noopener noreferrer">View {party} photo</a>
+                        ))}
+                        {!tx.rental_returned && (
+                          <label>
+                            Upload condition photo (JPEG)
+                            <input type="file" accept="image/jpeg" onChange={(event) => {
+                              const file = event.currentTarget.files?.[0];
+                              if (!file) return;
+                              const body = new FormData();
+                              body.append("file", file);
+                              void rentalAction(tx.id, "condition-photo", body, "Condition photo uploaded");
+                              event.currentTarget.value = "";
+                            }} />
+                          </label>
+                        )}
+                        {!tx.rental_returned && !isSeller && !tx.rental_extension_days && (
+                          <form className="flex gap-2" onSubmit={(event) => {
+                            event.preventDefault();
+                            const days = Number(new FormData(event.currentTarget).get("days"));
+                            void rentalAction(tx.id, "rental-extension", JSON.stringify({ days }), "Extension requested");
+                          }}>
+                            <input name="days" required type="number" min="1" max="365" aria-label="Additional rental days" className="w-20 border rounded px-2 bg-surface" />
+                            <Button type="submit" size="sm" variant="secondary">Request extension</Button>
+                          </form>
+                        )}
+                        {!tx.rental_returned && !!tx.rental_extension_days && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span>Extension requested for {tx.rental_extension_days} days</span>
+                            {isSeller && (["approve", "decline"] as const).map((decision) => (
+                              <Button key={decision} size="sm" variant="secondary" onClick={() =>
+                                void rentalAction(tx.id, "rental-extension/" + decision, undefined, "Extension request updated")
+                              }>{decision === "approve" ? "Approve" : "Decline"}</Button>
+                            ))}
+                          </div>
+                        )}
+                        <form className="flex gap-2" onSubmit={(event) => {
+                          event.preventDefault();
+                          const details = String(new FormData(event.currentTarget).get("details"));
+                          void rentalAction(tx.id, "rental-dispute", JSON.stringify({ details }), "Dispute submitted to moderation");
+                        }}>
+                          <input name="details" required minLength={2} maxLength={1700} aria-label="Rental dispute details" placeholder="What happened?" className="border rounded px-2 bg-surface" />
+                          <Button type="submit" size="sm" variant="secondary">Report rental issue</Button>
+                        </form>
+                      </div>
 
                       {!tx.rental_returned && isSeller && tx.state === "COMPLETED" && (
                         <div className="mt-3">

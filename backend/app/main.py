@@ -1,4 +1,8 @@
 import os
+import asyncio
+from contextlib import asynccontextmanager, suppress
+
+from app.core.websocket import manager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -14,7 +18,34 @@ import app.models  # noqa: F401 - ensure all models are registered
 # Auto-initialize database tables and extensions (works on SQLite & Supabase PostgreSQL)
 init_db()
 
-app = FastAPI(title=settings.PROJECT_NAME)
+@asynccontextmanager
+async def lifespan(app):
+    from app.services.reminders import run_reminders
+
+    manager.loop = asyncio.get_running_loop()
+    tasks = [asyncio.create_task(manager.listen()), asyncio.create_task(run_reminders())]
+    try:
+        yield
+    finally:
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with suppress(asyncio.CancelledError):
+                await task
+        manager.loop = None
+
+
+app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def check_request_origin(request: Request, call_next):
+    origin = request.headers.get("origin")
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        allowed_origin = origin in settings.CORS_ORIGINS or origin == str(request.base_url).rstrip("/")
+        if (origin and not allowed_origin) or (not origin and request.headers.get("sec-fetch-site") == "cross-site"):
+            return PlainTextResponse("Request origin is not allowed", status_code=403)
+    return await call_next(request)
 
 
 # 1. Security Headers Middleware (OWASP recommended)

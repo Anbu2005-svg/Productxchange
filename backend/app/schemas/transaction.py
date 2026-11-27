@@ -105,6 +105,7 @@ class TransactionOut(BaseModel):
     rental_returned: bool = False
     rental_return_date: Optional[datetime] = None
     rental_due_date: Optional[datetime] = None
+    rental_extension_days: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     product: Optional[BriefProduct] = None
@@ -114,6 +115,14 @@ class TransactionOut(BaseModel):
     handshake_pin: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RentalExtension(BaseModel):
+    days: int = Field(..., ge=1, le=365)
+
+
+class RentalDispute(BaseModel):
+    details: str = Field(..., min_length=2, max_length=1700)
 
 
 class HandshakeVerify(BaseModel):

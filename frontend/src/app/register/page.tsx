@@ -57,7 +57,7 @@ export default function RegisterPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const { access_token } = await api("/auth/register", {
+      await api("/auth/register", {
         method: "POST",
         body: JSON.stringify({
           email: form.email,
@@ -66,7 +66,7 @@ export default function RegisterPage() {
           college: form.college || null,
         }),
       });
-      setToken(access_token);
+      setToken();
       showToast("Account created successfully", "success");
 
       navigator.geolocation?.getCurrentPosition(

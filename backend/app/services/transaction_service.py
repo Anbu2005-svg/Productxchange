@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.transaction import Transaction, TransactionState, Offer, VALID_TRANSITIONS
-from app.models.product import ProductStatus
+from app.models.product import Product, ProductStatus
 from app.models.user import User
 from app.routers.notifications import create_notification
 from app.core.email import send_transactional_email
@@ -64,11 +64,9 @@ class TransactionService:
             seller_completed=False,
         )
         self.db.add(tx)
-        self.db.commit()
-        self.db.refresh(tx)
+        self.db.flush()
         if offer_amount is not None:
             self.db.add(Offer(transaction_id=tx.id, proposed_by_id=buyer_id, amount=offer_amount))
-            self.db.commit()
         create_notification(
             self.db, seller_id, "OFFER_RECEIVED",
             "New offer received!",
@@ -148,13 +146,25 @@ class TransactionService:
         return tx
 
     def confirm(self, tx: Transaction, actor_id: int) -> Transaction:
-        self._assert_transition(tx.state, TransactionState.CONFIRMED)
         if actor_id not in (tx.buyer_id, tx.seller_id):
             raise HTTPException(status_code=403, detail="Not a party to this transaction")
+        if tx.state == TransactionState.CONFIRMED:
+            return tx
+        self._assert_transition(tx.state, TransactionState.CONFIRMED)
+        reserved = self.db.query(Product).filter(
+            Product.id == tx.product_id, Product.status == ProductStatus.ACTIVE
+        ).update({Product.status: ProductStatus.PENDING})
+        if not reserved:
+            raise HTTPException(status_code=409, detail="This listing is already reserved or unavailable.")
         tx.state = TransactionState.CONFIRMED
-        # Anti ghost-deal / double-booking: lock listing status to PENDING handover
-        if tx.product and tx.product.status == ProductStatus.ACTIVE:
-            tx.product.status = ProductStatus.PENDING
+        competitors = self.db.query(Transaction).filter(
+            Transaction.product_id == tx.product_id, Transaction.id != tx.id,
+            Transaction.state.in_([TransactionState.PENDING, TransactionState.COUNTERED, TransactionState.ACCEPTED]),
+        ).all()
+        for competing in competitors:
+            competing.state = TransactionState.CANCELLED
+            create_notification(self.db, competing.buyer_id, "DEAL_CANCELLED", "Listing reserved",
+                                "The seller confirmed a different deal for this listing.", "/deals")
         notify_id = tx.buyer_id if actor_id == tx.seller_id else tx.seller_id
         create_notification(
             self.db, notify_id, "DEAL_CONFIRMED",
@@ -172,6 +182,8 @@ class TransactionService:
         return tx
 
     def complete(self, tx: Transaction, actor_id: int) -> Transaction:
+        if tx.state == TransactionState.COMPLETED and actor_id in (tx.buyer_id, tx.seller_id):
+            return tx
         if tx.state != TransactionState.CONFIRMED:
             raise HTTPException(
                 status_code=409,
@@ -227,13 +239,22 @@ class TransactionService:
             raise HTTPException(status_code=400, detail="Transaction must be completed before returning item")
         if not tx.product or str(getattr(tx.product, "transaction_type", "")).upper() not in ("RENT", "TRANSACTIONTYPE.RENT"):
             raise HTTPException(status_code=400, detail="Only rental transactions can be returned")
+        if actor_id != tx.seller_id:
+            raise HTTPException(status_code=403, detail="Only the owner can confirm receipt of the rental.")
         if tx.rental_returned:
-            raise HTTPException(status_code=400, detail="Rental item has already been marked returned")
+            return tx
+        if tx.product.status != ProductStatus.RENTED:
+            raise HTTPException(status_code=409, detail="This rental cannot be relisted in its current state.")
 
         from datetime import datetime, timezone
+        tx.rental_extension_days = None
         tx.rental_returned = True
         tx.rental_return_date = datetime.now(timezone.utc)
         tx.product.status = ProductStatus.ACTIVE
+        from app.routers.products import listing_is_expired
+        if listing_is_expired(tx.product):
+            tx.product.created_at = datetime.now(timezone.utc)
+            tx.product.expiry_reminded = False
 
         # Notify both parties
         create_notification(

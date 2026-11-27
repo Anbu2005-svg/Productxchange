@@ -203,13 +203,14 @@ export default function ListingDetailPage() {
 
   async function handleBumpListing() {
     if (!product) return;
+    const renewing = product.is_expired || (product.days_remaining ?? 30) <= 7;
     setBumping(true);
     try {
-      const updated = await api(`/products/${product.id}/bump`, { method: "POST" });
+      const updated = await api(`/products/${product.id}/${renewing ? "renew" : "bump"}`, { method: "POST" });
       setProduct(updated);
-      showToast("Listing bumped to top of search", "success");
+      showToast(renewing ? "Listing renewed for 30 days" : "Listing bumped to top of search", "success");
     } catch (err: any) {
-      showToast(err.message || "Could not bump listing", "error");
+      showToast(err.message || "Could not refresh listing", "error");
     } finally {
       setBumping(false);
     }
@@ -527,7 +528,7 @@ export default function ListingDetailPage() {
                   className="flex-1"
                 >
                   <RotateCw className="w-3.5 h-3.5 mr-1.5" />
-                  <span>Bump to top</span>
+                  <span>{product.is_expired || (product.days_remaining ?? 30) <= 7 ? "Renew listing" : "Bump to top"}</span>
                 </Button>
                 <Link href={`/listings/edit/${product.id}`} className="flex-1">
                   <Button variant="secondary" size="md" className="w-full">
@@ -547,6 +548,7 @@ export default function ListingDetailPage() {
                 <Button
                   variant="primary"
                   size="lg"
+                  disabled={product.is_expired}
                   onClick={() => setOfferModalOpen(true)}
                   className="flex-1"
                 >
@@ -590,7 +592,8 @@ export default function ListingDetailPage() {
           <Button
             variant="primary"
             size="md"
-            onClick={() => setOfferModalOpen(true)}
+            disabled={product.is_expired}
+                  onClick={() => setOfferModalOpen(true)}
             className="flex-1"
           >
             {product.transaction_type === "RENT"
