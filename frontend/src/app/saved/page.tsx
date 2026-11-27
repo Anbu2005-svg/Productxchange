@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSavedProducts, Product, getToken } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
+import SearchAlertSettings from "@/components/SearchAlertSettings";
 import { ProductCardSkeleton } from "@/components/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import { Bookmark, ArrowLeft } from "lucide-react";
@@ -51,6 +52,8 @@ export default function SavedProductsPage() {
           <span>Browse nearby feed</span>
         </Link>
       </div>
+
+      <SearchAlertSettings />
 
       {error && (
         <div className="mb-4 rounded-md border border-danger/20 bg-danger-subtle p-3 text-xs text-danger">

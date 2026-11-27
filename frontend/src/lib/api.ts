@@ -125,7 +125,10 @@ export async function api(path: string, options: RequestInit = {}) {
       window.location.replace("/login?redirect=" + encodeURIComponent(redirect));
     }
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `Request failed: ${res.status}`);
+    const detail = Array.isArray(body.detail)
+      ? body.detail.map((issue: { msg?: string }) => issue.msg).filter(Boolean).join(". ")
+      : body.detail;
+    throw new Error(detail || `Request failed: ${res.status}`);
   }
   return res.json();
 }

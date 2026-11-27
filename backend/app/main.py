@@ -13,6 +13,7 @@ from app.core.database import Base, engine, is_sqlite, init_db
 from app.core.rate_limit import get_client_ip, check_rate_limit
 from app.core.logging_config import StructuredLoggingMiddleware
 from app.routers import auth, products, transactions, chat, trust, admin, ai, notifications, analytics
+from app.routers import saved_searches
 import app.models  # noqa: F401 - ensure all models are registered
 
 # Auto-initialize database tables and extensions (works on SQLite & Supabase PostgreSQL)
@@ -149,6 +150,7 @@ app.include_router(trust.router)
 app.include_router(admin.router)
 app.include_router(ai.router)
 app.include_router(notifications.router)
+app.include_router(saved_searches.router)
 app.include_router(analytics.router)
 
 

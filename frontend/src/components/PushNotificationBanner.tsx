@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { subscribePush, triggerTestPush, getPushConfig } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import Button from "@/components/ui/Button";
 import { Bell, X, Check } from "lucide-react";
 
-export default function PushNotificationBanner() {
+export default function PushNotificationBanner({ embedded = false }: { embedded?: boolean }) {
+  const pathname = usePathname();
   const { showToast } = useToast();
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [dismissed, setDismissed] = useState(false);
@@ -85,7 +87,13 @@ export default function PushNotificationBanner() {
     localStorage.setItem("px_push_dismissed", "true");
   }
 
-  if (permission === "unsupported" || dismissed) {
+  if (!embedded && (pathname === "/saved" || dismissed)) return null;
+  if (embedded && (permission === "denied" || permission === "unsupported")) {
+    return <p className="mt-2 text-xs text-text-secondary">{permission === "denied"
+      ? "To receive device alerts, allow notifications in this browser’s site settings."
+      : "Device push is unavailable here. Your alerts appear in the notification bell."}</p>;
+  }
+  if (permission === "unsupported") {
     return null;
   }
 
@@ -95,8 +103,8 @@ export default function PushNotificationBanner() {
         <Bell className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.75} />
         <span>
           {subscribed
-            ? "Notifications are active for deal updates and physical meetup handovers."
-            : "Enable browser notifications to receive alerts when fellow students make offers."}
+            ? "Device alerts are enabled."
+            : "Enable device notifications for your selected alerts."}
         </span>
       </div>
 
@@ -129,14 +137,14 @@ export default function PushNotificationBanner() {
           </Button>
         )}
 
-        <button
+        {!embedded && <button
           type="button"
           onClick={handleDismiss}
           className="rounded p-1 text-text-tertiary transition-colors hover:bg-surface hover:text-text"
           aria-label="Dismiss notification banner"
         >
           <X className="h-3.5 w-3.5" />
-        </button>
+        </button>}
       </div>
     </div>
   );

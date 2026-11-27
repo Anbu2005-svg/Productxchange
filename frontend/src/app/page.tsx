@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { api, Product, getToken } from "@/lib/api";
+import { useToast } from "@/components/Toast";
 import ProductCard from "@/components/ProductCard";
 import { ProductCardSkeleton } from "@/components/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -83,6 +84,36 @@ export default function HomePage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
+  const [savingSearch, setSavingSearch] = useState(false);
+  const { showToast } = useToast();
+  const filters = new URLSearchParams();
+  if (query.trim()) filters.set("q", query.trim());
+  if (selectedType !== "ALL") filters.set("transaction_type", selectedType);
+  if (selectedCategory !== "ALL") filters.set("category", selectedCategory);
+  if (selectedCondition !== "ALL") filters.set("condition", selectedCondition);
+  if (selectedCampus.trim() && selectedCampus !== "ALL") filters.set("college", selectedCampus.trim());
+  if (has3DOnly) filters.set("has_3d", "true");
+  if (minPrice.trim()) filters.set("min_price", minPrice.trim());
+  if (maxPrice.trim()) filters.set("max_price", maxPrice.trim());
+  const filterQuery = filters.toString();
+
+  async function saveCurrentSearch() {
+    setSavingSearch(true);
+    try {
+      const criteria = Object.fromEntries(new URLSearchParams(filterQuery));
+      await api("/saved-searches", {
+        method: "POST",
+        body: JSON.stringify(useDistanceFilter && coords
+          ? { ...criteria, ...coords, radius_km: radiusKm } : criteria),
+      });
+      showToast("Search saved. Manage alerts in Saved.", "success");
+    } catch (error) {
+      showToast(error instanceof Error
+        ? error.message : "Check the search filters and price range.", "error");
+    } finally {
+      setSavingSearch(false);
+    }
+  }
   const PAGE_SIZE = 20;
 
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -145,16 +176,7 @@ export default function HomePage() {
 
       const skip = append ? (page + 1) * PAGE_SIZE : 0;
       let url: string;
-      const params = new URLSearchParams();
-
-      if (query.trim()) params.append("q", query.trim());
-      if (selectedType !== "ALL") params.append("transaction_type", selectedType);
-      if (selectedCategory !== "ALL") params.append("category", selectedCategory);
-      if (selectedCondition !== "ALL") params.append("condition", selectedCondition);
-      if (selectedCampus.trim() && selectedCampus !== "ALL") params.append("college", selectedCampus.trim());
-      if (has3DOnly) params.append("has_3d", "true");
-      if (minPrice.trim()) params.append("min_price", minPrice.trim());
-      if (maxPrice.trim()) params.append("max_price", maxPrice.trim());
+      const params = new URLSearchParams(filterQuery);
 
       if (useDistanceFilter && coords) {
         params.append("lat", String(coords.lat));
@@ -176,15 +198,7 @@ export default function HomePage() {
           const hasItems = Array.isArray(rawItems) && rawItems.length > 0;
 
           if (!hasItems && !append && useDistanceFilter) {
-            const fallbackParams = new URLSearchParams();
-            if (query.trim()) fallbackParams.append("q", query.trim());
-            if (selectedType !== "ALL") fallbackParams.append("transaction_type", selectedType);
-            if (selectedCategory !== "ALL") fallbackParams.append("category", selectedCategory);
-            if (selectedCondition !== "ALL") fallbackParams.append("condition", selectedCondition);
-            if (selectedCampus.trim() && selectedCampus !== "ALL") fallbackParams.append("college", selectedCampus.trim());
-            if (has3DOnly) fallbackParams.append("has_3d", "true");
-            if (minPrice.trim()) fallbackParams.append("min_price", minPrice.trim());
-            if (maxPrice.trim()) fallbackParams.append("max_price", maxPrice.trim());
+            const fallbackParams = new URLSearchParams(filterQuery);
             fallbackParams.append("skip", "0");
             fallbackParams.append("limit", String(PAGE_SIZE));
 
@@ -225,14 +239,7 @@ export default function HomePage() {
       useDistanceFilter,
       coords,
       radiusKm,
-      query,
-      selectedType,
-      selectedCategory,
-      selectedCondition,
-      selectedCampus,
-      has3DOnly,
-      minPrice,
-      maxPrice,
+      filterQuery,
       page,
     ]
   );
@@ -377,6 +384,15 @@ export default function HomePage() {
         </div>
 
         {/* Horizontally Scrollable Category Chips */}
+        {(filterQuery || useDistanceFilter) && (
+          <div className="flex items-center gap-4 text-xs">
+            <button type="button" className="font-semibold text-primary hover:underline"
+              onClick={saveCurrentSearch} disabled={savingSearch || (useDistanceFilter && !coords)}>
+              {savingSearch ? "Saving…" : "Save search alert"}
+            </button>
+            <Link href="/saved#saved-searches" className="text-text-secondary hover:underline">Manage alerts</Link>
+          </div>
+        )}
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
           {CATEGORY_CHIPS.map((cat) => {
             const Icon = cat.icon;

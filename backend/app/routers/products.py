@@ -21,6 +21,7 @@ from app.models.product import Product, ProductStatus
 from app.models.transaction import Transaction, TransactionState
 from app.models.report import Block
 from app.schemas.product import ProductCreate, ProductUpdate, ProductOut
+from app.routers.saved_searches import notify_matching_searches
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -193,6 +194,8 @@ def create_product(payload: ProductCreate, user: User = Depends(get_current_user
         image_angles=json.dumps(payload.image_angles) if payload.image_angles else None,
     )
     db.add(product)
+    db.flush()
+    notify_matching_searches(db, product, user)
     db.commit()
     db.refresh(product)
     return _sanitize_product_out(product, user, db)

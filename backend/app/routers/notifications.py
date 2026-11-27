@@ -1,18 +1,18 @@
 import asyncio
 import ipaddress
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Literal, get_args
 from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Query, status, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import event, text
+from sqlalchemy import event, select, text
 
 from app.core.database import get_db, is_sqlite
 from app.core.security import get_current_user, decode_session
 from app.core.rate_limit import check_rate_limit
 from app.core.websocket import manager
 from app.models.user import User
-from app.models.notification import Notification
+from app.models.notification import MutedNotification, Notification
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -80,9 +80,49 @@ def _validate_push_endpoint(endpoint: str):
 _push_subscriptions: Dict[int, list] = {}
 MAX_PUSH_CACHE_USERS = 10000
 
+Category = Literal["offers", "rentals", "listing_expiry", "saved_searches", "messages"]
+EVENT_CATEGORIES = {
+    **dict.fromkeys(("OFFER_RECEIVED", "OFFER_ACCEPTED", "OFFER_REJECTED", "COUNTER_OFFER",
+                     "DEAL_CANCELLED", "DEAL_CONFIRMED", "DEAL_COMPLETED"), "offers"),
+    **dict.fromkeys(("RENTAL_DUE", "RENTAL_EXTENSION", "RENTAL_RETURNED"), "rentals"),
+    "LISTING_EXPIRY": "listing_expiry", "SAVED_SEARCH_MATCH": "saved_searches", "NEW_MESSAGE": "messages",
+}
+
+
+class PreferenceChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool
+
+
+@router.get("/preferences")
+def preferences(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    muted = set(db.scalars(select(MutedNotification.category).where(MutedNotification.user_id == user.id)))
+    return {category: category not in muted for category in get_args(Category)}
+
+
+@router.put("/preferences/{category}")
+def change_preference(category: Category, change: PreferenceChange,
+                      user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if change.enabled:
+        db.query(MutedNotification).filter_by(user_id=user.id, category=category).delete()
+    else:
+        db.execute(text("INSERT INTO muted_notifications (user_id, category) VALUES (:uid, :category) "
+                        "ON CONFLICT (user_id, category) DO NOTHING"), {"uid": user.id, "category": category})
+    db.commit()
+    return preferences(user, db)
+
 
 def create_notification(db: Session, user_id: int, type: str, title: str, message: str = None, link: str = None):
     """Helper to create a notification from anywhere in the app and broadcast via live WebSocket."""
+    category = EVENT_CATEGORIES.get(type)
+    if category and db.get(MutedNotification, (user_id, category)) is not None:
+        if link == "/deals":
+            db.info.setdefault("silent_deal_updates", set()).add(user_id)
+        return
+    queue_notification(db, user_id, type, title, message, link)
+
+
+def queue_notification(db, user_id, type, title, message, link):
     notif = Notification(
         user_id=user_id,
         type=type,
@@ -93,29 +133,29 @@ def create_notification(db: Session, user_id: int, type: str, title: str, messag
     db.add(notif)
     # Don't commit here — let the caller commit as part of their transaction
 
-    db.info.setdefault("notifications_to_deliver", []).append((user_id, {
-        "type": type,
-        "title": title,
-        "message": message,
-        "link": link,
-        "deal_update": True,
-    }))
+    db.info.setdefault("notifications_to_deliver", []).append(notif)
 
 
 @event.listens_for(Session, "after_commit")
 def deliver_committed_notifications(db):
     from app.services.push_service import dispatch_push_async
 
-    for user_id, payload in db.info.pop("notifications_to_deliver", []):
-        manager.schedule_user_notification(user_id, payload)
-        dispatch_push_async(user_id, {
-            "type": payload["type"], "title": payload["title"],
-            "body": payload["message"], "url": payload["link"],
+    for user_id in db.info.pop("silent_deal_updates", set()):
+        manager.schedule_user_notification(user_id, {"deal_update": True})
+    for notif in db.info.pop("notifications_to_deliver", []):
+        manager.schedule_user_notification(notif.user_id, {
+            "id": notif.id, "type": notif.type, "title": notif.title,
+            "message": notif.message, "link": notif.link, "deal_update": notif.link == "/deals",
+        })
+        dispatch_push_async(notif.user_id, {
+            "type": notif.type, "title": notif.title,
+            "body": notif.message, "url": notif.link,
         })
 
 
 @event.listens_for(Session, "after_rollback")
 def discard_rolled_back_notifications(db):
+    db.info.pop("silent_deal_updates", None)
     db.info.pop("notifications_to_deliver", None)
 
 

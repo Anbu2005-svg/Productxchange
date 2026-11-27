@@ -79,11 +79,12 @@ export default function NotificationBell() {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+            if (!data.title) return;
             setUnreadCount((c) => c + 1);
             if (data.title) {
               setNotifications((prev) => [
                 {
-                  id: Date.now(),
+                  id: data.id,
                   type: data.type || "ALERT",
                   title: data.title,
                   message: data.message || null,
@@ -196,6 +197,8 @@ export default function NotificationBell() {
             <h3 className="text-xs font-semibold text-text uppercase tracking-wider">
               Notifications
             </h3>
+            <Link href="/saved#notification-preferences" onClick={() => setIsOpen(false)}
+              className="text-xs text-primary hover:underline">Preferences</Link>
             {unreadCount > 0 && (
               <button
                 type="button"

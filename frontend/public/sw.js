@@ -44,6 +44,8 @@ self.addEventListener("fetch", (event) => {
     request.method !== "GET" ||
     url.origin !== self.location.origin ||
     url.pathname.startsWith("/transactions/") ||
+    url.pathname.startsWith("/notifications") ||
+    url.pathname.startsWith("/saved-searches") ||
     url.pathname.startsWith("/api/") ||
     url.port === "8000" ||
     url.pathname.startsWith("/uploads/") ||

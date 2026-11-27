@@ -1,6 +1,33 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func, Text, Index
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, ForeignKey, Numeric, UniqueConstraint, func, Text, Index
 
 from app.core.database import Base
+
+
+class MutedNotification(Base):
+    __tablename__ = "muted_notifications"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    category = Column(String(32), primary_key=True)
+
+
+class SavedSearch(Base):
+    __tablename__ = "saved_searches"
+    __table_args__ = (UniqueConstraint("user_id", "signature", name="uq_saved_search_criteria"),)
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    signature = Column(String(64), nullable=False)
+    q = Column(String(150))
+    category = Column(String(60))
+    transaction_type = Column(String(12))
+    condition = Column(String(50))
+    college = Column(String(150))
+    min_price = Column(Numeric(12, 2))
+    max_price = Column(Numeric(12, 2))
+    has_3d = Column(Boolean)
+    lat = Column(Float)
+    lng = Column(Float)
+    radius_km = Column(Integer)
 
 
 class Notification(Base):

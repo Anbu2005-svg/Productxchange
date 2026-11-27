@@ -627,6 +627,9 @@ def delete_account(user: User = Depends(get_current_user), db: Session = Depends
     db.query(Product).filter(Product.seller_id == user.id).update({"status": ProductStatus.REMOVED})
 
     # Anonymize/delete user profile
+    from app.models.notification import MutedNotification, SavedSearch
+    db.query(SavedSearch).filter_by(user_id=user.id).delete()
+    db.query(MutedNotification).filter_by(user_id=user.id).delete()
     user.is_blocked_flag = True
     user.email = f"deleted_{user.id}_{uuid.uuid4().hex[:6]}@deleted.local"
     user.phone = None

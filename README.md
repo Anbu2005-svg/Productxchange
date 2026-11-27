@@ -8,6 +8,15 @@
 
 ## Marketplace reliability update
 
+### Saved-search alerts and notification preferences
+
+- In the browser or installed PWA, choose a keyword or filter in the feed and select **Save search alert**. Alerts follow your selected category, deal type, condition, campus, price range, 3D filter, and nearby radius when set. A new listing that matches several of your searches creates one alert linking to that listing.
+- Open **Saved → Saved searches** to remove an alert. Open **Notifications → Preferences** to turn offers and deals, rentals, listing expiry, chat, or saved-search matches on or off. Preferences apply to future bell and device alerts across the account. Pausing matches keeps the searches saved.
+- To receive alerts while the app is closed, select **Enable notifications** on each supported browser or installed PWA and grant permission. Push uses the VAPID configuration below. The bell works independently of device permission.
+- PostgreSQL deployments should run `alembic upgrade head` from `backend` before starting this version. SQLite creates the new tables at startup.
+
+### Existing marketplace features
+
 - **Deals** reserve an available listing atomically and cancel competing negotiations. Repeating confirmation, completion, or owner return leaves the result intact. PostgreSQL enforces one confirmed deal per listing with a partial unique index.
 - **Accounts** use the server-set HttpOnly cookie for browser API requests and WebSockets. The browser-readable marker only controls page navigation. Set the frontend and API on the same site, and include the frontend origin in FastAPI's CORS configuration. For local development, use the same hostname on both ports, such as localhost.
 - **Listings** leave discovery after 30 days and stop accepting new offers until the owner renews. A reminder appears in the notification bell within seven days of expiry. On the listing page, **Renew listing** starts a new 30-day window and follows the existing 24-hour cooldown. Existing negotiations can still be completed.
