@@ -151,19 +151,26 @@ def _normalize_phone(phone: Optional[str]) -> Optional[str]:
 
 
 def _set_auth_cookie(response: Response, token: str):
+    is_prod = settings.ENV == "production"
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
-        samesite="lax",
-        secure=settings.ENV == "production",
+        samesite="none" if is_prod else "lax",
+        secure=is_prod,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
 
 
 def _clear_auth_cookie(response: Response):
-    response.delete_cookie(key="access_token", path="/")
+    is_prod = settings.ENV == "production"
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        samesite="none" if is_prod else "lax",
+        secure=is_prod,
+    )
 
 
 def _check_otp_cooldown(phone: str):
