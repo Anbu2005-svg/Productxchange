@@ -25,7 +25,7 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserOut, UserUpdate
 from app.services.email_service import (
-    is_smtp_configured, send_email_verification_otp, send_password_reset_email,
+    is_email_configured, send_email_verification_otp, send_password_reset_email,
 )
 
 ALLOWED_AVATAR_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -318,7 +318,7 @@ def send_register_email_otp(payload: EmailOTPRequest, db: Session = Depends(get_
     _check_otp_cooldown(otp_key)
     _check_rate_limit(otp_key)
 
-    if settings.ENV == "production" and not is_smtp_configured():
+    if settings.ENV == "production" and not is_email_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Email verification service is not configured yet. Please contact administrator.",
@@ -335,7 +335,7 @@ def send_register_email_otp(payload: EmailOTPRequest, db: Session = Depends(get_
         )
 
     resp: dict[str, str] = {"message": "Verification code sent to your email."}
-    if settings.ENV != "production" and not is_smtp_configured():
+    if settings.ENV != "production" and not is_email_configured():
         resp["dev_otp"] = otp
     return resp
 
