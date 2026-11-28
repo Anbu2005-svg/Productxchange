@@ -130,3 +130,73 @@ def test_email_otp_verification_before_register(client, monkeypatch):
     assert me_res.status_code == 200
     assert me_res.json()["is_verified"] is True
     client.cookies.clear()
+
+
+def test_supabase_verification_link_and_google_oauth(client, monkeypatch):
+    from types import SimpleNamespace
+    from app.core.config import settings
+    from app.routers import auth as auth_router
+
+    monkeypatch.setattr(settings, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "SUPABASE_KEY", "anon-key-example")
+
+    def fake_post(url, **kwargs):
+        return SimpleNamespace(status_code=200, json=lambda: {})
+
+    def fake_get(url, **kwargs):
+        token = kwargs.get("headers", {}).get("Authorization", "")
+        if "google-token" in token:
+            return SimpleNamespace(
+                status_code=200,
+                json=lambda: {
+                    "email": "google.student@college.edu",
+                    "user_metadata": {"full_name": "Google Student", "avatar_url": "https://example.com/a.png"},
+                },
+            )
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {"email": "link.student@college.edu", "user_metadata": {}},
+        )
+
+    monkeypatch.setattr(auth_router.httpx, "post", fake_post)
+    monkeypatch.setattr(auth_router.httpx, "get", fake_get)
+
+    # 1. Send verification link via Supabase
+    link_res = client.post(
+        "/auth/register/send-link",
+        json={"email": "link.student@college.edu", "redirect_to": "http://localhost:3000/register"},
+    )
+    assert link_res.status_code == 200
+
+    # 2. Verify token and register
+    tok_res = client.post(
+        "/auth/supabase/verify-email-token",
+        json={"supabase_access_token": "valid-supabase-email-token-123456"},
+    )
+    assert tok_res.status_code == 200
+    assert tok_res.json()["email"] == "link.student@college.edu"
+
+    reg_res = client.post(
+        "/auth/register",
+        json={
+            "email": "link.student@college.edu",
+            "password": "secretpassword1",
+            "supabase_access_token": "valid-supabase-email-token-123456",
+        },
+    )
+    assert reg_res.status_code == 200
+    assert "access_token" in reg_res.json()
+    client.cookies.clear()
+
+    # 3. Google OAuth URL + login
+    url_res = client.get("/auth/oauth/google/url?redirect_to=http://localhost:3000/login")
+    assert url_res.status_code == 200
+    assert "provider=google" in url_res.json()["url"]
+
+    oauth_res = client.post(
+        "/auth/supabase/oauth-login",
+        json={"supabase_access_token": "valid-google-token-1234567890"},
+    )
+    assert oauth_res.status_code == 200
+    assert "access_token" in oauth_res.json()
+    client.cookies.clear()

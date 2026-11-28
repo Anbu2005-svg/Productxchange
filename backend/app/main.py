@@ -86,8 +86,10 @@ async def add_security_headers(request: Request, call_next):
 
 # 2. Rate Limiting Middleware for Sensitive Routes
 RATE_LIMIT_RULES = {
-    "/auth/register/send-otp": (5, 60), # 5 email verification codes / minute per IP
-    "/auth/register": (10, 60),       # 10 registrations / minute per IP
+    "/auth/register/send-link": (5, 60), # 5 Supabase verification links / minute per IP
+    "/auth/register/send-otp": (5, 60),  # 5 email verification codes / minute per IP
+    "/auth/supabase": (15, 60),          # 15 Supabase token verifications / minute per IP
+    "/auth/register": (10, 60),          # 10 registrations / minute per IP
     "/auth/login": (25, 60),          # 25 login requests / minute per IP
     "/auth/otp/request": (5, 60),     # 5 OTP requests / minute per IP (prevents SMS toll fraud)
     "/auth/users/": (30, 60),         # 30 profile lookups / minute per IP (anti-scraping)

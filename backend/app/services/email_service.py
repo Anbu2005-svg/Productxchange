@@ -5,7 +5,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional
 
-import httpx
+from app.core.config import settings
 
 logger = logging.getLogger("productxchange.email")
 
@@ -15,72 +15,18 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@productxchange.campus")
 
-MSG91_AUTH_KEY = os.getenv("MSG91_AUTH_KEY", "")
-MSG91_TEMPLATE_ID = os.getenv("MSG91_TEMPLATE_ID", "")
-MSG91_DOMAIN = os.getenv("MSG91_DOMAIN", "")
-
-
-def _send_via_msg91(
-    to_email: str,
-    subject: str,
-    html_content: str,
-    variables: Optional[dict[str, str]] = None,
-) -> bool:
-    """Send transactional email via MSG91 Email API v5."""
-    auth_key = os.getenv("MSG91_AUTH_KEY", MSG91_AUTH_KEY)
-    domain = os.getenv("MSG91_DOMAIN", MSG91_DOMAIN)
-    template_id = os.getenv("MSG91_TEMPLATE_ID", MSG91_TEMPLATE_ID)
-    from_email = os.getenv("EMAIL_FROM", EMAIL_FROM)
-    if "@" not in from_email or from_email.endswith(".campus"):
-        from_email = f"noreply@{domain}"
-
-    recipient: dict = {"to": [{"email": to_email}]}
-    if variables:
-        recipient["variables"] = variables
-
-    payload: dict = {
-        "recipients": [recipient],
-        "from": {"email": from_email, "name": "ProductXchange"},
-        "domain": domain,
-    }
-    if template_id:
-        payload["template_id"] = template_id
-    else:
-        payload["subject"] = subject
-        payload["body"] = {"type": "text/html", "data": html_content}
-
-    try:
-        resp = httpx.post(
-            "https://control.msg91.com/api/v5/email/send",
-            headers={"authkey": auth_key, "Content-Type": "application/json", "Accept": "application/json"},
-            json=payload,
-            timeout=10,
-        )
-        if 200 <= resp.status_code < 300:
-            logger.info("MSG91 email accepted for %s", to_email)
-            return True
-        logger.error("MSG91 email failed (%s): %s", resp.status_code, resp.text)
-        return False
-    except Exception as exc:
-        logger.error("MSG91 request failed for %s: %s", to_email, exc)
-        return False
-
 
 def _send_email_raw(
     to_email: str,
     subject: str,
     html_content: str,
     text_content: Optional[str] = None,
-    variables: Optional[dict[str, str]] = None,
 ):
     """
-    Sends an email using configured SMTP or MSG91 HTTP API, or safely logs in dev/testing.
+    Sends an email using configured SMTP credentials or safely logs it in development/testing.
     """
     if not text_content:
         text_content = html_content
-
-    if is_msg91_configured() and not is_smtp_configured():
-        return _send_via_msg91(to_email, subject, html_content, variables=variables)
 
     if not SMTP_HOST or not SMTP_USER:
         logger.info(
@@ -136,12 +82,8 @@ def is_smtp_configured() -> bool:
     return bool(os.getenv("SMTP_HOST", SMTP_HOST) and os.getenv("SMTP_USER", SMTP_USER) and os.getenv("SMTP_PASSWORD", SMTP_PASSWORD))
 
 
-def is_msg91_configured() -> bool:
-    return bool(os.getenv("MSG91_AUTH_KEY", MSG91_AUTH_KEY) and os.getenv("MSG91_DOMAIN", MSG91_DOMAIN))
-
-
 def is_email_configured() -> bool:
-    return is_smtp_configured() or is_msg91_configured()
+    return is_smtp_configured()
 
 
 def send_email_verification_otp(to_email: str, otp: str) -> bool:
@@ -159,7 +101,7 @@ def send_email_verification_otp(to_email: str, otp: str) -> bool:
         <p style="font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 12px;">ProductXchange — Location-First College Marketplace</p>
     </div>
     """
-    return _send_email_raw(to_email, subject, html_body, text_body, variables={"otp": otp, "OTP": otp})
+    return _send_email_raw(to_email, subject, html_body, text_body)
 
 
 def send_password_reset_email(to_email: str, recipient_name: str, reset_url: str):

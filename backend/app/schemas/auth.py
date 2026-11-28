@@ -8,6 +8,19 @@ class EmailOTPRequest(BaseModel):
     email: EmailStr
 
 
+class EmailLinkRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    email: EmailStr
+    redirect_to: Optional[str] = Field(None, max_length=300)
+
+
+class SupabaseTokenRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    supabase_access_token: str = Field(..., min_length=20, max_length=4096)
+
+
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
@@ -17,6 +30,7 @@ class RegisterRequest(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     college: Optional[str] = Field(None, max_length=150)
     email_otp: Optional[str] = Field(None, min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
+    supabase_access_token: Optional[str] = Field(None, min_length=20, max_length=4096)
 
     @field_validator("password")
     @classmethod

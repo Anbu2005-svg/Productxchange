@@ -4,6 +4,8 @@ import secrets
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+from urllib.parse import quote, urlparse
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request, UploadFile, File
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from sqlalchemy.orm import Session
@@ -21,7 +23,8 @@ from app.core.rate_limit import rate_limit_dependency, check_rate_limit
 
 from app.models.user import User
 from app.schemas.auth import (
-    EmailOTPRequest, RegisterRequest, LoginRequest, TokenResponse, OTPVerifyRequest, LocationUpdateRequest,
+    EmailLinkRequest, EmailOTPRequest, RegisterRequest, LoginRequest,
+    SupabaseTokenRequest, TokenResponse, OTPVerifyRequest, LocationUpdateRequest,
 )
 from app.schemas.user import UserOut, UserUpdate
 from app.services.email_service import (
@@ -307,6 +310,169 @@ def _mask_email(email: str) -> str:
     return f"{masked_name}@{domain}"
 
 
+def _get_safe_redirect_url(redirect_to: Optional[str], fallback_path: str) -> str:
+    default_origin = settings.CORS_ORIGINS[0] if settings.CORS_ORIGINS else "http://localhost:3000"
+    fallback = f"{default_origin.rstrip('/')}{fallback_path}"
+    if not redirect_to:
+        return fallback
+    try:
+        parsed = urlparse(redirect_to)
+        candidate_origin = f"{parsed.scheme}://{parsed.netloc}"
+        allowed_origins = set(settings.CORS_ORIGINS) | {"http://localhost:3000", "http://127.0.0.1:3000"}
+        if candidate_origin in allowed_origins:
+            return redirect_to
+    except Exception:
+        pass
+    return fallback
+
+
+def _verify_supabase_user_token(access_token: str) -> dict:
+    if not (settings.SUPABASE_URL and settings.SUPABASE_KEY):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase Auth is not configured on the server.",
+        )
+    url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/user"
+    try:
+        resp = httpx.get(
+            url,
+            headers={
+                "apikey": settings.SUPABASE_KEY,
+                "Authorization": f"Bearer {access_token}",
+            },
+            timeout=10,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not reach Supabase Auth service.",
+        )
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired verification token.",
+        )
+    data = resp.json()
+    if not data.get("email"):
+        raise HTTPException(status_code=400, detail="Verified email missing from Supabase response.")
+    return data
+
+
+@router.post("/register/send-link")
+def send_register_verification_link(payload: EmailLinkRequest, db: Session = Depends(get_db)):
+    clean_email = payload.email.strip().lower()
+    existing = db.query(User).filter(func.lower(User.email) == clean_email).first()
+    if existing:
+        return {"message": "If this email is eligible, a verification link has been sent."}
+
+    otp_key = f"email_link:{clean_email}"
+    _check_otp_cooldown(otp_key)
+    _check_rate_limit(otp_key)
+
+    if not (settings.SUPABASE_URL and settings.SUPABASE_KEY):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase Auth is not configured on the server.",
+        )
+
+    safe_redirect = _get_safe_redirect_url(payload.redirect_to, "/register")
+    otp_url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/otp"
+    try:
+        resp = httpx.post(
+            otp_url,
+            headers={"apikey": settings.SUPABASE_KEY, "Content-Type": "application/json"},
+            json={
+                "email": clean_email,
+                "create_user": True,
+                "email_redirect_to": safe_redirect,
+            },
+            timeout=10,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not reach Supabase email service.",
+        )
+
+    if resp.status_code == 429:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Email rate limit reached (Supabase free tier allows 2 emails/hour). Please wait or use Google Sign-In.",
+        )
+    if resp.status_code >= 400:
+        detail = "Could not send verification link."
+        try:
+            err = resp.json()
+            detail = err.get("msg") or err.get("error_description") or err.get("message") or detail
+        except Exception:
+            pass
+        raise HTTPException(status_code=400, detail=detail)
+
+    return {"message": "Verification link sent to your email. Click it to continue creating your account."}
+
+
+@router.post("/supabase/verify-email-token")
+def verify_supabase_email_token(payload: SupabaseTokenRequest):
+    sb_user = _verify_supabase_user_token(payload.supabase_access_token)
+    return {
+        "email": sb_user["email"].strip().lower(),
+        "full_name": (sb_user.get("user_metadata") or {}).get("full_name") or (sb_user.get("user_metadata") or {}).get("name"),
+    }
+
+
+@router.get("/oauth/google/url")
+def get_google_oauth_url(redirect_to: Optional[str] = None):
+    if not settings.SUPABASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase Auth is not configured on the server.",
+        )
+    safe_redirect = _get_safe_redirect_url(redirect_to, "/login")
+    base = settings.SUPABASE_URL.rstrip("/")
+    return {"url": f"{base}/auth/v1/authorize?provider=google&redirect_to={quote(safe_redirect, safe='')}"}
+
+
+@router.post("/supabase/oauth-login", response_model=TokenResponse)
+def supabase_oauth_login(payload: SupabaseTokenRequest, response: Response, db: Session = Depends(get_db)):
+    sb_user = _verify_supabase_user_token(payload.supabase_access_token)
+    clean_email = sb_user["email"].strip().lower()
+    meta = sb_user.get("user_metadata") or {}
+    full_name = meta.get("full_name") or meta.get("name")
+    avatar_url = meta.get("avatar_url") or meta.get("picture")
+
+    user = db.query(User).filter(func.lower(User.email) == clean_email).first()
+    if user:
+        if user.is_blocked_flag:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is suspended. Please contact administrator.",
+            )
+        if not user.is_verified:
+            user.is_verified = True
+            user.verification_method = user.verification_method or "google_oauth"
+        if not user.full_name and full_name:
+            user.full_name = full_name
+        if not user.avatar_url and avatar_url:
+            user.avatar_url = avatar_url
+        db.commit()
+    else:
+        user = User(
+            email=clean_email,
+            password_hash=hash_password(secrets.token_urlsafe(32)),
+            full_name=full_name,
+            avatar_url=avatar_url,
+            is_verified=True,
+            verification_method="college_email" if clean_email.endswith((".edu", ".ac.in")) else "google_oauth",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    token = create_access_token(subject=str(user.id), session_version=user.session_version)
+    _set_auth_cookie(response, token)
+    return TokenResponse(access_token=token)
+
+
 @router.post("/register/send-otp")
 def send_register_email_otp(payload: EmailOTPRequest, db: Session = Depends(get_db)):
     clean_email = payload.email.strip().lower()
@@ -351,9 +517,15 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
 
     email_verified = False
     verification_method = None
-    if settings.ENV == "production" or payload.email_otp is not None:
+    if payload.supabase_access_token:
+        sb_user = _verify_supabase_user_token(payload.supabase_access_token)
+        if sb_user["email"].strip().lower() != clean_email:
+            raise HTTPException(status_code=400, detail="Verified email does not match registration email.")
+        email_verified = True
+        verification_method = "college_email" if clean_email.endswith((".edu", ".ac.in")) else "supabase_email"
+    elif settings.ENV == "production" or payload.email_otp is not None:
         if not payload.email_otp:
-            raise HTTPException(status_code=400, detail="Email verification code is required.")
+            raise HTTPException(status_code=400, detail="Please verify your email via verification link before creating an account.")
         otp_key = f"email:{clean_email}"
         now = time.time()
         failure_entry = _local_otp_failures.get(otp_key, {"count": 0, "first_at": now})
