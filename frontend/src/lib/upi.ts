@@ -29,23 +29,29 @@ export function isValidUpiId(upiId: string): boolean {
  */
 export function buildUpiUri(details: UpiPaymentDetails): string {
   const { upiId, payeeName, amount, transactionNote, transactionRefId } = details;
-  const cleanUpi = upiId.trim();
-  const cleanName = payeeName.trim() || "Campus Student";
+  const cleanUpi = upiId.trim().toLowerCase();
+  const cleanName = (payeeName.trim() || "Campus Student")
+    .replace(/[&=?#]/g, "")  // Strip UPI-unsafe chars from name
+    .slice(0, 50);            // Keep payee name short
   const formattedAmount = amount > 0 ? amount.toFixed(2) : "0.00";
-  const note = transactionNote || `ProductXchange Deal ${transactionRefId ? `#${transactionRefId}` : ""}`;
+  const note = (transactionNote || `ProductXchange Deal ${transactionRefId ? `#${transactionRefId}` : ""}`)
+    .replace(/[&=?#]/g, "")
+    .slice(0, 50);
 
-  const params = new URLSearchParams();
-  params.set("pa", cleanUpi);
-  params.set("pn", cleanName);
-  params.set("am", formattedAmount);
-  params.set("cu", "INR");
-  params.set("tn", note);
+  // Build the URI manually with encodeURIComponent (NOT URLSearchParams which uses + for spaces)
+  const parts: string[] = [
+    `pa=${encodeURIComponent(cleanUpi)}`,
+    `pn=${encodeURIComponent(cleanName)}`,
+    `am=${encodeURIComponent(formattedAmount)}`,
+    `cu=INR`,
+    `tn=${encodeURIComponent(note)}`,
+  ];
 
   if (transactionRefId) {
-    params.set("tr", `PX${transactionRefId}`);
+    parts.push(`tr=${encodeURIComponent(`PX${transactionRefId}`)}`);
   }
 
-  return `upi://pay?${params.toString()}`;
+  return `upi://pay?${parts.join("&")}`;
 }
 
 /**

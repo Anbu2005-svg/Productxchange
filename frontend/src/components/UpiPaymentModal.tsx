@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { buildUpiUri, isValidUpiId, formatInr } from "@/lib/upi";
-import { generateQrMatrix, matrixToSvgPath } from "@/lib/qr";
-import { Copy, Check, ExternalLink, QrCode, ShieldCheck, AlertCircle } from "lucide-react";
+import { Copy, Check, ExternalLink, ShieldCheck } from "lucide-react";
 
 interface UpiPaymentModalProps {
   isOpen: boolean;
@@ -34,11 +33,12 @@ export default function UpiPaymentModal({
   const [upiId, setUpiId] = useState(defaultUpiId || "");
   const [copied, setCopied] = useState(false);
   const [editMode, setEditMode] = useState(!defaultUpiId);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrError, setQrError] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Validate UPI ID
   const isVpaValid = useMemo(() => isValidUpiId(upiId), [upiId]);
 
-  // Construct NPCI URI
   const upiUri = useMemo(() => {
     if (!isVpaValid) return "";
     return buildUpiUri({
@@ -46,23 +46,36 @@ export default function UpiPaymentModal({
       payeeName: sellerName,
       amount,
       transactionRefId: dealId,
-      transactionNote: `ProductXchange ${dealId}: ${productTitle || "Campus item"}`,
+      transactionNote: `PX${dealId} ${productTitle || "Campus item"}`.slice(0, 50),
     });
   }, [isVpaValid, upiId, sellerName, amount, dealId, productTitle]);
 
-  // Generate SVG QR Matrix
-  const qrSvgData = useMemo(() => {
-    if (!upiUri) return null;
-    try {
-      const matrix = generateQrMatrix(upiUri);
-      const size = matrix.length;
-      const scale = 7;
-      const path = matrixToSvgPath(matrix, scale);
-      const totalSize = size * scale;
-      return { path, totalSize };
-    } catch {
-      return null;
+  // Generate QR using the battle-tested `qrcode` npm package
+  useEffect(() => {
+    if (!upiUri) {
+      setQrDataUrl(null);
+      setQrError(false);
+      return;
     }
+    let cancelled = false;
+    setQrError(false);
+
+    import("qrcode").then((QRCode) => {
+      QRCode.toDataURL(upiUri, {
+        errorCorrectionLevel: "M",
+        margin: 2,
+        width: 240,
+        color: { dark: "#161A18", light: "#FFFFFF" },
+      }).then((url) => {
+        if (!cancelled) setQrDataUrl(url);
+      }).catch(() => {
+        if (!cancelled) setQrError(true);
+      });
+    }).catch(() => {
+      if (!cancelled) setQrError(true);
+    });
+
+    return () => { cancelled = true; };
   }, [upiUri]);
 
   const handleCopyUpi = () => {
@@ -109,8 +122,8 @@ export default function UpiPaymentModal({
               label={isSeller ? "Your UPI ID / VPA" : "Seller's UPI ID / VPA"}
               placeholder="e.g. name@okhdfcbank or 9876543210@paytm"
               value={upiId}
-              onChange={(e) => setUpiId(e.target.value)}
-              helperText="Supported handles: @okhdfcbank, @okicici, @paytm, @ybl, @upi, etc."
+              onChange={(e) => setUpiId(e.target.value.trim())}
+              helperText="Supported: @okhdfcbank, @okicici, @paytm, @ybl, @upi, @ibl, etc."
               required
             />
             {!isVpaValid && upiId.length > 2 && (
@@ -145,42 +158,46 @@ export default function UpiPaymentModal({
           </div>
         )}
 
-        {/* QR Code Presentation */}
-        {isVpaValid && qrSvgData && (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-surface p-4 text-center">
-            <div className="bg-white p-3 rounded-md shadow-xs">
-              <svg
-                width="180"
-                height="180"
-                viewBox={`0 0 ${qrSvgData.totalSize} ${qrSvgData.totalSize}`}
+        {/* QR Code */}
+        {isVpaValid && !editMode && (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-white p-5 text-center">
+            {qrDataUrl ? (
+              <img
+                src={qrDataUrl}
+                alt="UPI Payment QR Code"
                 className="mx-auto block"
-              >
-                <path d={qrSvgData.path} fill="#161A18" />
-              </svg>
-            </div>
-
+                style={{ width: 200, height: 200, imageRendering: "pixelated" }}
+              />
+            ) : qrError ? (
+              <div className="text-xs text-danger py-6">Could not generate QR. Use the UPI link below.</div>
+            ) : (
+              <div className="w-[200px] h-[200px] flex items-center justify-center">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+              </div>
+            )}
             <p className="mt-3 text-xs text-text-secondary">
               Scan with <strong>Google Pay</strong>, <strong>PhonePe</strong>, <strong>Paytm</strong>, or any UPI app
             </p>
+            <p className="mt-1 text-[11px] text-text-tertiary font-mono break-all px-2">{upiId}</p>
           </div>
         )}
 
-        {/* Direct Mobile Launch Button */}
-        {isVpaValid && upiUri && (
+        {/* Direct Mobile Intent Button */}
+        {isVpaValid && upiUri && !editMode && (
           <div className="space-y-2">
             <a href={upiUri} className="block w-full">
               <Button variant="primary" className="w-full">
                 <ExternalLink className="h-4 w-4" strokeWidth={1.75} />
-                <span>Open in UPI App (Mobile)</span>
+                <span>Open UPI App directly (Mobile)</span>
               </Button>
             </a>
             <p className="text-center text-[11px] text-text-tertiary">
-              Tapping will launch Google Pay, PhonePe, or Paytm with the agreed price pre-filled
+              Tap to launch Google Pay, PhonePe, or Paytm with the amount pre-filled
             </p>
           </div>
         )}
 
-        {/* Trust & Verification Disclaimer */}
+        {/* Trust Disclaimer */}
         <div className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary-subtle p-3 text-xs text-primary">
           <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={1.75} />
           <div className="flex-1 leading-relaxed">
