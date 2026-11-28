@@ -140,7 +140,10 @@ def test_supabase_verification_link_and_google_oauth(client, monkeypatch):
     monkeypatch.setattr(settings, "SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setattr(settings, "SUPABASE_KEY", "anon-key-example")
 
+    posted_urls = []
+
     def fake_post(url, **kwargs):
+        posted_urls.append(url)
         return SimpleNamespace(status_code=200, json=lambda: {})
 
     def fake_get(url, **kwargs):
@@ -167,6 +170,7 @@ def test_supabase_verification_link_and_google_oauth(client, monkeypatch):
         json={"email": "link.student@college.edu", "redirect_to": "http://localhost:3000/register"},
     )
     assert link_res.status_code == 200
+    assert posted_urls and "redirect_to=http%3A%2F%2Flocalhost%3A3000%2Fregister" in posted_urls[0]
 
     # 2. Verify token and register
     tok_res = client.post(

@@ -104,11 +104,6 @@ export default function RegisterPage() {
   }
 
   useEffect(() => {
-    if (getToken()) {
-      router.replace("/");
-      return;
-    }
-
     if (typeof window !== "undefined" && window.location.hash) {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get("access_token");
@@ -163,14 +158,19 @@ export default function RegisterPage() {
               college: prev.college || pending?.college || "",
             }));
             setStep("complete");
-            showToast("Email verified! Confirm your details to finish.", "success");
+            showToast("Email verified! Confirm your password and click Create account.", "success");
           })
           .catch((err: any) => {
             setError(err.message || "Verification link expired or invalid. Please request a new one.");
             setStep("email");
           })
           .finally(() => setVerifyingToken(false));
+        return;
       }
+    }
+
+    if (getToken()) {
+      router.replace("/");
     }
   }, [router, showToast]);
 
@@ -446,7 +446,7 @@ export default function RegisterPage() {
               <h2 className="text-sm font-semibold text-text">Check your inbox</h2>
               <p className="mt-1 text-xs text-text-secondary leading-relaxed">
                 We sent a verification link to{" "}
-                <span className="font-medium text-text">{form.email}</span>. Click the link in that email to finish creating your account.
+                <span className="font-medium text-text">{form.email}</span>. Open the email (it may say &ldquo;Your sign-in link&rdquo;) and click the link to finish creating your account.
               </p>
             </div>
             <div className="flex items-center justify-center gap-4 pt-2 text-xs text-text-secondary">

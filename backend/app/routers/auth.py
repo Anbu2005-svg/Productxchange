@@ -376,7 +376,7 @@ def send_register_verification_link(payload: EmailLinkRequest, db: Session = Dep
         )
 
     safe_redirect = _get_safe_redirect_url(payload.redirect_to, "/register")
-    otp_url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/otp"
+    otp_url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/otp?redirect_to={quote(safe_redirect, safe='')}"
     try:
         resp = httpx.post(
             otp_url,
