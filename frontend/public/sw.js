@@ -1,5 +1,5 @@
-// ProductXchange Progressive Web App Service Worker (v3.0)
-const CACHE_NAME = "px-pwa-v3";
+// ProductXchange Progressive Web App Service Worker (v4.0)
+const CACHE_NAME = "px-pwa-v4";
 const STATIC_PRECACHE = [
   "/",
   "/offline.html",

@@ -79,6 +79,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <footer className="border-t border-border py-6 pb-24 md:pb-6 bg-surface text-xs text-text-tertiary mt-8">
             <div className="max-w-[1200px] mx-auto px-4 md:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-2">
+                <img
+                  src="/icons/icon.svg"
+                  alt="ProductXchange logo"
+                  className="h-5 w-5 rounded-sm shrink-0"
+                />
                 <span className="font-semibold text-text">ProductXchange</span>
                 <span>•</span>
                 <span>Campus Circular Marketplace</span>

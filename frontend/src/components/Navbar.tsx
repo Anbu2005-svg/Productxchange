@@ -123,8 +123,13 @@ export default function Navbar() {
         <div className="flex items-center gap-6 h-full">
           <Link
             href="/"
-            className="text-base font-bold tracking-tight text-text flex items-center gap-1.5 focus-visible:outline-primary"
+            className="text-base font-bold tracking-tight text-text flex items-center gap-2 focus-visible:outline-primary"
           >
+            <img
+              src="/icons/icon.svg"
+              alt="ProductXchange logo"
+              className="h-7 w-7 rounded-md shrink-0"
+            />
             <span>ProductXchange</span>
           </Link>
 
