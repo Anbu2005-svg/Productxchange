@@ -45,6 +45,8 @@ function GoogleIcon() {
   );
 }
 
+const PENDING_SIGNUP_KEY = "px_pending_signup";
+
 export default function RegisterPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -63,6 +65,43 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [verifyingToken, setVerifyingToken] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  async function completeRegistration(
+    payload: { email: string; password: string; full_name: string; college?: string | null },
+    accessToken: string
+  ) {
+    await api("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        email: payload.email,
+        password: payload.password,
+        full_name: payload.full_name,
+        college: payload.college || null,
+        supabase_access_token: accessToken,
+      }),
+    });
+    try {
+      sessionStorage.removeItem(PENDING_SIGNUP_KEY);
+    } catch {}
+    setToken();
+    showToast("Account created successfully", "success");
+
+    navigator.geolocation?.getCurrentPosition(
+      async (pos) => {
+        try {
+          await api("/auth/me/location", {
+            method: "PATCH",
+            body: JSON.stringify({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            }),
+          });
+        } catch {}
+        window.location.replace("/");
+      },
+      () => window.location.replace("/")
+    );
+  }
 
   useEffect(() => {
     if (getToken()) {
@@ -86,15 +125,45 @@ export default function RegisterPage() {
           method: "POST",
           body: JSON.stringify({ supabase_access_token: accessToken }),
         })
-          .then((res) => {
+          .then(async (res) => {
+            const verifiedEmail = (res.email || "").trim().toLowerCase();
+            let pending: { email?: string; password?: string; full_name?: string; college?: string } | null = null;
+            try {
+              const raw = sessionStorage.getItem(PENDING_SIGNUP_KEY);
+              if (raw) pending = JSON.parse(raw);
+            } catch {}
+
+            if (
+              pending &&
+              pending.email?.trim().toLowerCase() === verifiedEmail &&
+              pending.password &&
+              pending.full_name
+            ) {
+              try {
+                await completeRegistration(
+                  {
+                    email: verifiedEmail,
+                    password: pending.password,
+                    full_name: pending.full_name,
+                    college: pending.college,
+                  },
+                  accessToken
+                );
+                return;
+              } catch (err: any) {
+                setError(err.message || "Registration failed");
+              }
+            }
+
             setSupabaseAccessToken(accessToken);
             setForm((prev) => ({
               ...prev,
-              email: res.email || prev.email,
-              full_name: prev.full_name || res.full_name || "",
+              email: verifiedEmail || prev.email,
+              full_name: prev.full_name || pending?.full_name || res.full_name || "",
+              college: prev.college || pending?.college || "",
             }));
             setStep("complete");
-            showToast("Email verified! Finish creating your account.", "success");
+            showToast("Email verified! Confirm your details to finish.", "success");
           })
           .catch((err: any) => {
             setError(err.message || "Verification link expired or invalid. Please request a new one.");
@@ -111,7 +180,8 @@ export default function RegisterPage() {
   const doPasswordsMatch = form.password === form.confirmPassword;
   const strength = getPasswordStrength(form.password);
 
-  const isFormValid = isEmailValid && isNameValid && isPasswordValid && doPasswordsMatch && Boolean(supabaseAccessToken);
+  const isDetailsValid = isEmailValid && isNameValid && isPasswordValid && doPasswordsMatch;
+  const isFormValid = isDetailsValid && Boolean(supabaseAccessToken);
 
   async function handleGoogleSignIn() {
     setError(null);
@@ -130,10 +200,21 @@ export default function RegisterPage() {
 
   async function handleSendVerificationLink(e: React.FormEvent) {
     e.preventDefault();
-    if (!isEmailValid) return;
+    if (!isDetailsValid) return;
     setSubmitting(true);
     setError(null);
     try {
+      try {
+        sessionStorage.setItem(
+          PENDING_SIGNUP_KEY,
+          JSON.stringify({
+            email: form.email.trim().toLowerCase(),
+            full_name: form.full_name.trim(),
+            password: form.password,
+            college: form.college.trim() || null,
+          })
+        );
+      } catch {}
       await api("/auth/register/send-link", {
         method: "POST",
         body: JSON.stringify({
@@ -156,33 +237,14 @@ export default function RegisterPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await api("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({
+      await completeRegistration(
+        {
           email: form.email,
           password: form.password,
           full_name: form.full_name,
           college: form.college || null,
-          supabase_access_token: supabaseAccessToken,
-        }),
-      });
-      setToken();
-      showToast("Account created successfully", "success");
-
-      navigator.geolocation?.getCurrentPosition(
-        async (pos) => {
-          try {
-            await api("/auth/me/location", {
-              method: "PATCH",
-              body: JSON.stringify({
-                latitude: pos.coords.latitude,
-                longitude: pos.coords.longitude,
-              }),
-            });
-          } catch {}
-          router.push("/");
         },
-        () => router.push("/")
+        supabaseAccessToken
       );
     } catch (err: any) {
       setError(err.message || "Registration failed");
@@ -191,13 +253,141 @@ export default function RegisterPage() {
     }
   }
 
+  function renderAccountDetailsFields(includeEmail: boolean) {
+    return (
+      <>
+        <div>
+          <Input
+            label="Full name"
+            id="reg-name"
+            required
+            placeholder="e.g. Aditi Sharma"
+            value={form.full_name}
+            onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+            error={
+              form.full_name && !isNameValid
+                ? "Name must be at least 2 characters"
+                : undefined
+            }
+          />
+        </div>
+
+        {includeEmail && (
+          <div>
+            <Input
+              label="Email address"
+              id="reg-email"
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="name@college.edu or you@gmail.com"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              helperText="We will send a verification link to this email"
+              error={
+                form.email && !isEmailValid
+                  ? "Please enter a valid email address"
+                  : undefined
+              }
+            />
+          </div>
+        )}
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label htmlFor="reg-password" className="block text-xs font-medium text-text">
+              Password <span className="text-danger">*</span>
+            </label>
+            {strength.label && (
+              <span className="font-mono text-[11px] text-text-tertiary">
+                {strength.label}
+              </span>
+            )}
+          </div>
+          <div className="relative">
+            <input
+              id="reg-password"
+              type={showPassword ? "text" : "password"}
+              required
+              autoComplete="new-password"
+              placeholder="At least 8 characters (letters & numbers)"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 pr-10 text-base text-text placeholder:text-text-tertiary focus:border-primary focus:outline-hidden"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-2.5 text-text-tertiary hover:text-text"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+              ) : (
+                <Eye className="h-4 w-4" strokeWidth={1.75} />
+              )}
+            </button>
+          </div>
+
+          {form.password.length > 0 && (
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-border">
+              <div
+                style={{ width: strength.width }}
+                className={`h-full transition-all duration-200 ${
+                  strength.level === 3
+                    ? "bg-success"
+                    : strength.level === 2
+                    ? "bg-warning"
+                    : "bg-danger"
+                }`}
+              />
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="reg-confirm" className="block text-xs font-medium text-text mb-1.5">
+            Confirm password <span className="text-danger">*</span>
+          </label>
+          <input
+            id="reg-confirm"
+            type={showPassword ? "text" : "password"}
+            required
+            autoComplete="new-password"
+            placeholder="Re-enter your password"
+            value={form.confirmPassword}
+            onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+            className={`w-full rounded-md border bg-surface px-3 py-2 text-base text-text placeholder:text-text-tertiary focus:outline-hidden ${
+              form.confirmPassword && !doPasswordsMatch
+                ? "border-danger focus:border-danger"
+                : "border-border focus:border-primary"
+            }`}
+          />
+          {form.confirmPassword && !doPasswordsMatch && (
+            <p className="mt-1 text-xs text-danger">Passwords do not match</p>
+          )}
+        </div>
+
+        <div>
+          <Input
+            label="College or campus name (optional)"
+            id="reg-college"
+            placeholder="e.g. IIT Madras, VIT, NIT"
+            value={form.college}
+            onChange={(e) => setForm({ ...form, college: e.target.value })}
+          />
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center py-8">
       <div className="rounded-lg border border-border bg-surface p-6 sm:p-8 shadow-xs">
         <div className="mb-6">
           <h1 className="text-xl font-semibold text-text">Create account</h1>
           <p className="mt-1 text-xs text-text-secondary">
-            Verify your email or sign up with Google to join ProductXchange
+            Enter your details and verify your email, or sign up with Google
           </p>
         </div>
 
@@ -214,6 +404,27 @@ export default function RegisterPage() {
           </div>
         ) : step === "email" ? (
           <div className="space-y-4">
+            <form onSubmit={handleSendVerificationLink} className="space-y-4">
+              {renderAccountDetailsFields(true)}
+              <Button
+                type="submit"
+                variant="primary"
+                className="w-full"
+                disabled={!isDetailsValid || submitting || googleLoading}
+                loading={submitting}
+              >
+                Send verification link
+              </Button>
+            </form>
+
+            <div className="relative flex items-center py-1">
+              <div className="flex-grow border-t border-border" />
+              <span className="mx-3 shrink-0 text-[11px] uppercase tracking-wider text-text-tertiary">
+                or
+              </span>
+              <div className="flex-grow border-t border-border" />
+            </div>
+
             <Button
               type="button"
               variant="secondary"
@@ -225,42 +436,6 @@ export default function RegisterPage() {
               <GoogleIcon />
               <span>Continue with Google</span>
             </Button>
-
-            <div className="relative flex items-center py-1">
-              <div className="flex-grow border-t border-border" />
-              <span className="mx-3 shrink-0 text-[11px] uppercase tracking-wider text-text-tertiary">
-                or verify with email
-              </span>
-              <div className="flex-grow border-t border-border" />
-            </div>
-
-            <form onSubmit={handleSendVerificationLink} className="space-y-4">
-              <Input
-                label="Email address"
-                id="reg-email"
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="name@college.edu or you@gmail.com"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                helperText="We will send a verification link to confirm your email before creating your account"
-                error={
-                  form.email && !isEmailValid
-                    ? "Please enter a valid email address"
-                    : undefined
-                }
-              />
-              <Button
-                type="submit"
-                variant="primary"
-                className="w-full"
-                disabled={!isEmailValid || submitting || googleLoading}
-                loading={submitting}
-              >
-                Send verification link
-              </Button>
-            </form>
           </div>
         ) : step === "sent" ? (
           <div className="space-y-4 text-center py-2">
@@ -280,7 +455,7 @@ export default function RegisterPage() {
                 onClick={() => { setStep("email"); setError(null); }}
                 className="hover:text-text hover:underline"
               >
-                Use a different email
+                Edit details
               </button>
               <button
                 type="button"
@@ -299,106 +474,7 @@ export default function RegisterPage() {
               <span className="truncate">Verified: {form.email}</span>
             </div>
 
-            <div>
-              <Input
-                label="Full name"
-                id="reg-name"
-                required
-                placeholder="e.g. Aditi Sharma"
-                value={form.full_name}
-                onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                error={
-                  form.full_name && !isNameValid
-                    ? "Name must be at least 2 characters"
-                    : undefined
-                }
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="reg-password" className="block text-xs font-medium text-text">
-                  Password <span className="text-danger">*</span>
-                </label>
-                {strength.label && (
-                  <span className="font-mono text-[11px] text-text-tertiary">
-                    {strength.label}
-                  </span>
-                )}
-              </div>
-              <div className="relative">
-                <input
-                  id="reg-password"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  autoComplete="new-password"
-                  placeholder="At least 8 characters (letters & numbers)"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  className="w-full rounded-md border border-border bg-surface px-3 py-2 pr-10 text-base text-text placeholder:text-text-tertiary focus:border-primary focus:outline-hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-text-tertiary hover:text-text"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" strokeWidth={1.75} />
-                  ) : (
-                    <Eye className="h-4 w-4" strokeWidth={1.75} />
-                  )}
-                </button>
-              </div>
-
-              {form.password.length > 0 && (
-                <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-border">
-                  <div
-                    style={{ width: strength.width }}
-                    className={`h-full transition-all duration-200 ${
-                      strength.level === 3
-                        ? "bg-success"
-                        : strength.level === 2
-                        ? "bg-warning"
-                        : "bg-danger"
-                    }`}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="reg-confirm" className="block text-xs font-medium text-text mb-1.5">
-                Confirm password <span className="text-danger">*</span>
-              </label>
-              <input
-                id="reg-confirm"
-                type={showPassword ? "text" : "password"}
-                required
-                autoComplete="new-password"
-                placeholder="Re-enter your password"
-                value={form.confirmPassword}
-                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                className={`w-full rounded-md border bg-surface px-3 py-2 text-base text-text placeholder:text-text-tertiary focus:outline-hidden ${
-                  form.confirmPassword && !doPasswordsMatch
-                    ? "border-danger focus:border-danger"
-                    : "border-border focus:border-primary"
-                }`}
-              />
-              {form.confirmPassword && !doPasswordsMatch && (
-                <p className="mt-1 text-xs text-danger">Passwords do not match</p>
-              )}
-            </div>
-
-            <div>
-              <Input
-                label="College or campus name (optional)"
-                id="reg-college"
-                placeholder="e.g. IIT Madras, VIT, NIT"
-                value={form.college}
-                onChange={(e) => setForm({ ...form, college: e.target.value })}
-              />
-            </div>
+            {renderAccountDetailsFields(false)}
 
             <div className="pt-2">
               <Button
