@@ -15,6 +15,7 @@ import MultiAnglePhotoStudio, {
   AngleData,
   AnglePreviews,
 } from "@/components/MultiAnglePhotoStudio";
+import CameraCaptureModal from "@/components/CameraCaptureModal";
 import { useToast } from "@/components/Toast";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -65,6 +66,7 @@ export default function EditListingPage() {
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newPreviews, setNewPreviews] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showCameraModal, setShowCameraModal] = useState(false);
 
   // 3D Studio state
   const [activePhotoTab, setActivePhotoTab] = useState<"3d" | "classic">("3d");
@@ -123,8 +125,7 @@ export default function EditListingPage() {
     load();
   }, [id, router]);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
+  function addNewFiles(files: File[]) {
     if (!files.length) return;
 
     if (existingImages.length + newFiles.length + files.length > 5) {
@@ -142,6 +143,11 @@ export default function EditListingPage() {
     setNewFiles([...newFiles, ...files]);
     setNewPreviews([...newPreviews, ...files.map((f) => URL.createObjectURL(f))]);
     setError(null);
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    addNewFiles(Array.from(e.target.files || []));
+    e.target.value = "";
   }
 
   function handleRemoveNewFile(index: number) {
@@ -425,14 +431,24 @@ export default function EditListingPage() {
                   ))}
 
                   {existingImages.length + newFiles.length < 5 && (
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex h-20 w-20 flex-col items-center justify-center rounded-md border border-dashed border-border text-xs text-text-tertiary transition-colors hover:border-primary hover:text-primary"
-                    >
-                      <Upload className="h-4 w-4" strokeWidth={1.75} />
-                      <span className="mt-1 text-[11px]">Add photo</span>
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex h-20 w-20 flex-col items-center justify-center rounded-md border border-dashed border-border text-xs text-text-tertiary transition-colors hover:border-primary hover:text-primary"
+                      >
+                        <Upload className="h-4 w-4" strokeWidth={1.75} />
+                        <span className="mt-1 text-[11px]">Add photo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowCameraModal(true)}
+                        className="flex h-20 w-20 flex-col items-center justify-center rounded-md border border-dashed border-primary/50 bg-primary-subtle/30 text-xs text-primary transition-colors hover:border-primary hover:bg-primary-subtle"
+                      >
+                        <Camera className="h-4 w-4" strokeWidth={1.75} />
+                        <span className="mt-1 text-[11px]">Take photo</span>
+                      </button>
+                    </>
                   )}
                 </div>
 
@@ -467,6 +483,13 @@ export default function EditListingPage() {
           </div>
         </form>
       </div>
+
+      <CameraCaptureModal
+        isOpen={showCameraModal}
+        title="Take item photo"
+        onCapture={(file) => addNewFiles([file])}
+        onClose={() => setShowCameraModal(false)}
+      />
     </div>
   );
 }

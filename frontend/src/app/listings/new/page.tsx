@@ -22,6 +22,7 @@ import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import { TypeTag } from "@/components/ui/Badge";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
+import CameraCaptureModal from "@/components/CameraCaptureModal";
 import { BookMetadata } from "@/lib/isbn";
 import {
   Camera,
@@ -88,6 +89,7 @@ export default function NewListingPage() {
 
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [showCameraModal, setShowCameraModal] = useState(false);
   const [analyzingAI, setAnalyzingAI] = useState(false);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -142,8 +144,7 @@ export default function NewListingPage() {
     } catch {}
   }, [form]);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
+  function addSelectedFiles(files: File[]) {
     if (!files.length) return;
 
     if (selectedFiles.length + files.length > 6) {
@@ -164,6 +165,11 @@ export default function NewListingPage() {
     setSelectedFiles(newFiles);
     setPreviewUrls(newPreviews);
     setError(null);
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    addSelectedFiles(Array.from(e.target.files || []));
+    e.target.value = "";
   }
 
   function handleRemoveFile(index: number) {
@@ -575,17 +581,33 @@ export default function NewListingPage() {
                 )}
 
                 {selectedFiles.length < 6 && (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border p-6 text-center transition-colors hover:border-primary hover:bg-surface-muted"
-                  >
-                    <Upload className="mb-2 h-6 w-6 text-text-tertiary" strokeWidth={1.75} />
+                  <div className="rounded-md border border-dashed border-border p-6 text-center">
                     <p className="text-xs font-medium text-text">
-                      {selectedFiles.length === 0 ? "Click to upload photos" : "Add more photos"}
+                      {selectedFiles.length === 0 ? "Add item photos" : "Add more photos"}
                     </p>
                     <p className="mt-0.5 text-xs text-text-tertiary">
-                      PNG, JPG, WEBP up to 5MB (maximum 6 photos)
+                      Upload from your device or take a photo directly with your camera (max 6 photos, 5MB each)
                     </p>
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Upload className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        <span>Upload photos</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setShowCameraModal(true)}
+                      >
+                        <Camera className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        <span>Take photo</span>
+                      </Button>
+                    </div>
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -929,6 +951,14 @@ export default function NewListingPage() {
           isOpen={showBarcodeModal}
           onClose={() => setShowBarcodeModal(false)}
           onBookFound={handleBookDetected}
+        />
+
+        {/* Direct Camera Capture Modal */}
+        <CameraCaptureModal
+          isOpen={showCameraModal}
+          title="Take item photo"
+          onCapture={(file) => addSelectedFiles([file])}
+          onClose={() => setShowCameraModal(false)}
         />
       </div>
     </div>

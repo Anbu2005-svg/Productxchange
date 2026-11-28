@@ -2,8 +2,10 @@
 
 import { useState, useRef } from "react";
 import Product3DViewer from "@/components/Product3DViewer";
+import CameraCaptureModal from "@/components/CameraCaptureModal";
 import {
   Camera,
+  Upload,
   Box,
   Check,
   X,
@@ -122,6 +124,7 @@ export default function MultiAnglePhotoStudio({
     Boolean(initialPreviews.front && (initialPreviews.right || initialPreviews.back || initialPreviews.left))
   );
   const [showLivePreview, setShowLivePreview] = useState(true);
+  const [cameraTargetAngle, setCameraTargetAngle] = useState<keyof AngleData | null>(null);
 
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
@@ -290,10 +293,28 @@ export default function MultiAnglePhotoStudio({
                     <X className="h-3.5 w-3.5" strokeWidth={2} />
                   </button>
 
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                    <span className="rounded-md bg-surface px-2 py-1 text-xs font-medium text-text shadow-xs">
-                      Change photo
-                    </span>
+                  <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fileInputRefs.current[slot.key]?.click();
+                      }}
+                      className="rounded-md bg-surface px-2 py-1 text-xs font-medium text-text shadow-xs hover:bg-surface-muted"
+                    >
+                      Upload
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCameraTargetAngle(slot.key);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-on-primary shadow-xs hover:bg-primary-hover"
+                    >
+                      <Camera className="h-3 w-3" />
+                      Camera
+                    </button>
                   </div>
 
                   <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-on-primary">
@@ -301,22 +322,33 @@ export default function MultiAnglePhotoStudio({
                   </span>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => fileInputRefs.current[slot.key]?.click()}
-                  className="flex aspect-square w-full flex-col items-center justify-center p-3 text-center transition-colors hover:bg-surface focus:outline-hidden"
-                >
+                <div className="flex aspect-square w-full flex-col items-center justify-center p-2.5 text-center">
                   <Icon className="mb-1.5 h-5 w-5 text-text-tertiary group-hover:text-primary" strokeWidth={1.75} />
                   <span className="text-xs font-medium text-text">
                     {slot.label}
                   </span>
-                  <span className="mt-0.5 text-xs text-text-tertiary">
+                  <span className="mt-0.5 text-[11px] text-text-tertiary">
                     {slot.required ? "Required" : "Optional"}
                   </span>
-                  <span className="mt-1.5 text-xs font-medium text-primary">
-                    Upload
-                  </span>
-                </button>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRefs.current[slot.key]?.click()}
+                      className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-[11px] font-medium text-text hover:border-primary hover:text-primary"
+                    >
+                      <Upload className="h-3 w-3" />
+                      Upload
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCameraTargetAngle(slot.key)}
+                      className="inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-[11px] font-medium text-on-primary hover:bg-primary-hover"
+                    >
+                      <Camera className="h-3 w-3" />
+                      Camera
+                    </button>
+                  </div>
+                </div>
               )}
 
               {/* Slot Footer Guidance */}
@@ -413,6 +445,19 @@ export default function MultiAnglePhotoStudio({
           )}
         </div>
       )}
+
+      <CameraCaptureModal
+        isOpen={Boolean(cameraTargetAngle)}
+        title={
+          cameraTargetAngle
+            ? `Take photo: ${ANGLE_SLOTS.find((s) => s.key === cameraTargetAngle)?.label || cameraTargetAngle}`
+            : "Take a photo"
+        }
+        onCapture={(file) => {
+          if (cameraTargetAngle) handleFileSelect(cameraTargetAngle, file);
+        }}
+        onClose={() => setCameraTargetAngle(null)}
+      />
     </div>
   );
 }
